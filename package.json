@@ -9,7 +9,8 @@
   "scripts": {
     "fetch": "node scripts/fetch-data.mjs",
     "calendars": "node scripts/build-calendars.mjs",
+    "seo": "node scripts/build-seo.mjs",
     "serve": "python3 -m http.server 8321 --directory site",
-    "dev": "npm run fetch && npm run calendars && npm run serve"
+    "dev": "npm run fetch && npm run calendars && npm run seo && npm run serve"
   }
 }

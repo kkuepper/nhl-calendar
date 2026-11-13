@@ -3,10 +3,14 @@
 
 import { DEFAULT_SERVICES, MARKETS, SERVICES } from './coverage.js';
 
+// Site root, from this module's URL, so pages under /team/<ABBREV>/ still
+// load the shared JSON.
+const siteRoot = new URL('../', import.meta.url);
+
 // ---------------------------------------------------------------- data
 
 export async function loadData() {
-  const res = await fetch('data/schedule.json', { cache: 'no-cache' });
+  const res = await fetch(new URL('data/schedule.json', siteRoot), { cache: 'no-cache' });
   if (!res.ok) throw new Error(`Could not load the schedule (HTTP ${res.status}).`);
   const data = await res.json();
   data.teamsByAbbrev = new Map(data.teams.map((t) => [t.abbrev, t]));
@@ -20,7 +24,7 @@ export async function loadData() {
 export async function loadHistory() {
   try {
     // Default HTTP caching: finished seasons change about once a year.
-    const res = await fetch('data/history.json');
+    const res = await fetch(new URL('data/history.json', siteRoot));
     if (!res.ok) return [];
     const raw = await res.json();
     return Object.entries(raw.seasons ?? {})

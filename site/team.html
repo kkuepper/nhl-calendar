@@ -1,12 +1,22 @@
 <!doctype html>
-<html lang="en">
+<html lang="en-CA">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Team schedule · NHL on Canadian TV</title>
-  <meta name="description" content="Upcoming games, Canadian broadcasters, and how many games you can watch with your subscriptions.">
+  <meta name="description" content="Upcoming NHL games and the Canadian channels that carry them: Sportsnet, TSN, RDS, TVA Sports, and Prime Video.">
+  <meta name="robots" content="noindex">
+  <meta name="google-site-verification" content="QXpKezsz6wlyEP-Tw1eoV5ghvLyqrHnl01e-_Mbq1sw" />
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="css/styles.css">
+  <script>
+    // Old links used team.html?team=TOR. The indexed page is /team/TOR/.
+    (function () {
+      var team = (new URLSearchParams(location.search).get('team') || '').toUpperCase();
+      if (/^[A-Z]{2,3}$/.test(team)) location.replace('team/' + team + '/' + location.hash);
+    })();
+  </script>
+  <script async src="https://analytics.palmeta.net/a.js" data-write-key="NgiYGs9ILHd3n86TXg-h8A"></script>
   <script type="module" src="js/team.js"></script>
 </head>
 <body>

@@ -1,5 +1,6 @@
 import { MARKETS, SERVICES, seasonCoverage, suggestions, teamCoverage } from './coverage.js';
 import { feedPath, feedSelection, plainFeedPath } from './feeds.js';
+import { teamDescription, teamJsonLd, teamTitle, teamUrl } from './seo.js';
 import {
   esc,
   loadData,
@@ -15,6 +16,7 @@ import {
   updatedLabel,
 } from './ui.js';
 
+const siteRoot = new URL('../', import.meta.url);
 const INITIAL_GAMES = 10;
 const MAX_PAST_SEASONS = 4;
 
@@ -23,9 +25,58 @@ const timeFmt = new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2
 const monthFmt = new Intl.DateTimeFormat(undefined, { month: 'long', year: 'numeric' });
 const dayKey = (d) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
 
+/** Team code from /team/TOR/ or the legacy ?team=TOR query. */
+function teamAbbrev() {
+  const query = new URLSearchParams(location.search).get('team');
+  if (query) return query.toUpperCase();
+  const parts = location.pathname.split('/').filter(Boolean);
+  const index = parts.lastIndexOf('team');
+  const abbrev = index >= 0 ? parts[index + 1] : '';
+  return abbrev && /^[A-Za-z]{2,3}$/.test(abbrev) ? abbrev.toUpperCase() : '';
+}
+
+function setMeta(name, content, attr = 'name') {
+  let el = document.head.querySelector(`meta[${attr}="${name}"]`);
+  if (!el) {
+    el = document.createElement('meta');
+    el.setAttribute(attr, name);
+    document.head.appendChild(el);
+  }
+  el.setAttribute('content', content);
+}
+
+/** Title, description, canonical, social tags, and SportsEvent JSON-LD. */
+function applyTeamMeta(team, data) {
+  const title = teamTitle(team);
+  const description = teamDescription(team);
+  const url = teamUrl(team.abbrev);
+  document.title = title;
+  setMeta('description', description);
+  setMeta('og:title', title, 'property');
+  setMeta('og:description', description, 'property');
+  setMeta('og:url', url, 'property');
+  setMeta('twitter:title', title);
+  setMeta('twitter:description', description);
+  let canonical = document.querySelector('link[rel="canonical"]');
+  if (!canonical) {
+    canonical = document.createElement('link');
+    canonical.rel = 'canonical';
+    document.head.appendChild(canonical);
+  }
+  canonical.href = url;
+  let ld = document.getElementById('seo-jsonld');
+  if (!ld) {
+    ld = document.createElement('script');
+    ld.id = 'seo-jsonld';
+    ld.type = 'application/ld+json';
+    document.head.appendChild(ld);
+  }
+  ld.textContent = JSON.stringify(teamJsonLd(team, data.games, data.teamsByAbbrev));
+}
+
 async function main() {
   const gamesEl = document.getElementById('games');
-  const abbrev = (new URLSearchParams(location.search).get('team') || '').toUpperCase();
+  const abbrev = teamAbbrev();
 
   let data;
   try {
@@ -46,7 +97,7 @@ async function main() {
 
   // Only fetched for a real team; past seasons arrive after the page is usable.
   const historyPromise = loadHistory();
-  document.title = `${team.name} · NHL on Canadian TV`;
+  applyTeamMeta(team, data);
   renderHero(team, data);
   const calendar = mountCalendar(team);
 
@@ -147,7 +198,7 @@ function mountCalendar(team) {
     const personal = prefs.services.length > 0;
     const selection = feedSelection(prefs.services, team.abbrev);
     const path = personal ? feedPath(team.abbrev, selection, mode) : plainFeedPath(team.abbrev);
-    const feed = new URL(path, location.href).href;
+    const feed = new URL(path, siteRoot).href;
     const webcal = feed.replace(/^https?:/, 'webcal:');
 
     $('[data-link="google"]').href = `https://calendar.google.com/calendar/r?cid=${encodeURIComponent(webcal)}`;
