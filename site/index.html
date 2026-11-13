@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>NHL on Canadian TV</title>
+  <meta name="description" content="Every NHL team's upcoming games, the Canadian channels carrying them, and how many you can watch with your subscriptions.">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="css/styles.css">
+  <script type="module" src="js/home.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="wrap topbar-inner">
+      <a class="brand" href="./">
+        <img src="favicon.svg" alt="" width="26" height="26">
+        <span>NHL on Canadian TV</span>
+      </a>
+      <span class="topbar-meta" id="season"></span>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <section class="intro">
+      <h1>Which games can you actually watch?</h1>
+      <p>Every team's upcoming games and the Canadian channels carrying them. Pick your subscriptions and see, team by team, how much of the season you'd catch.</p>
+    </section>
+
+    <section class="prefs card" id="prefs" aria-label="Your subscriptions"></section>
+
+    <div id="teams" class="teams" aria-live="polite">
+      <p class="loading">Loading schedule…</p>
+    </div>
+  </main>
+
+  <footer class="footer">
+    <div class="wrap">
+      <p>Schedule and broadcasters from the NHL's public web API, refreshed daily. <span id="updated"></span></p>
+      <p>The mapping from channels to subscriptions is maintained by hand and can be wrong — regional blackout rules are simplified. Not affiliated with the NHL; team names and logos are trademarks of the NHL and its teams.</p>
+    </div>
+  </footer>
+</body>
+</html>

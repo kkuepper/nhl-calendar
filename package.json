@@ -1,0 +1,14 @@
+{
+  "name": "nhl-calendar",
+  "private": true,
+  "description": "NHL schedules with Canadian TV broadcasters, and how many games your subscriptions cover.",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "fetch": "node scripts/fetch-data.mjs",
+    "serve": "python3 -m http.server 8321 --directory site",
+    "dev": "npm run fetch && npm run serve"
+  }
+}
