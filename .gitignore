@@ -3,3 +3,4 @@ node_modules/
 site/calendars/
 .DS_Store
 .claude/
+.analytics/

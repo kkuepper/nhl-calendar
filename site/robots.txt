@@ -1,0 +1,7 @@
+# GitHub Pages project sites cannot publish a robots.txt at the domain root
+# (https://kkuepper.github.io/robots.txt). This file is served at
+# https://kkuepper.github.io/nhl-calendar/robots.txt. Submit the sitemap in Google Search Console.
+User-agent: *
+Allow: /
+
+Sitemap: https://kkuepper.github.io/nhl-calendar/sitemap.xml

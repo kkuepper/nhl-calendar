@@ -99,7 +99,7 @@ function teamCard(team, cov, hasServices) {
     ? `${team.name}: you can watch ${cov.watchable} of ${cov.total} remaining games`
     : `${team.name}: ${cov.total} remaining games`;
   return `
-    <a class="team-card" href="team.html?team=${encodeURIComponent(team.abbrev)}" style="${teamColorStyle(team.abbrev)}" aria-label="${esc(label)}">
+    <a class="team-card" href="team/${encodeURIComponent(team.abbrev)}/" style="${teamColorStyle(team.abbrev)}" aria-label="${esc(label)}">
       ${logoHtml(team, { size: 48, className: 'team-card-logo' })}
       <span class="team-card-name">
         <span class="team-card-place">${esc(team.place)}</span>

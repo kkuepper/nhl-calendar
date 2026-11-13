@@ -49,6 +49,11 @@ jobs:
       - name: Build calendar feeds
         run: node scripts/build-calendars.mjs
 
+      # Sitemap, robots.txt, and prerendered team pages. Rewritten every deploy
+      # so new teams and game lists ship with the schedule.
+      - name: Build sitemap and prerendered pages
+        run: node scripts/build-seo.mjs
+
       - uses: actions/configure-pages@v5
 
       - uses: actions/upload-pages-artifact@v4
