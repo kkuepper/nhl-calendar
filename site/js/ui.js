@@ -1,7 +1,7 @@
 // Shared UI helpers: data loading, saved preferences, the subscription picker,
 // the coverage pie and small formatting utilities.
 
-import { MARKETS, SERVICES } from './coverage.js';
+import { DEFAULT_SERVICES, MARKETS, SERVICES } from './coverage.js';
 
 // ---------------------------------------------------------------- data
 
@@ -11,6 +11,34 @@ export async function loadData() {
   const data = await res.json();
   data.teamsByAbbrev = new Map(data.teams.map((t) => [t.abbrev, t]));
   return data;
+}
+
+/**
+ * Past regular seasons, newest first: [{ season: "20252026", games: [{home, away, tv}] }].
+ * Returns [] when the file is missing so the page still works without it.
+ */
+export async function loadHistory() {
+  try {
+    // Default HTTP caching: finished seasons change about once a year.
+    const res = await fetch('data/history.json');
+    if (!res.ok) return [];
+    const raw = await res.json();
+    return Object.entries(raw.seasons ?? {})
+      .map(([season, games]) => ({
+        season,
+        games: games.map(([home, away, tv]) => ({
+          home,
+          away,
+          tv: tv.map((entry) => {
+            const i = entry.lastIndexOf(':');
+            return { network: entry.slice(0, i), market: entry.slice(i + 1) };
+          }),
+        })),
+      }))
+      .sort((a, b) => b.season.localeCompare(a.season));
+  } catch {
+    return [];
+  }
 }
 
 // ---------------------------------------------------------------- preferences
@@ -23,20 +51,26 @@ export function loadPrefs() {
     if (raw && Array.isArray(raw.services)) {
       const known = new Set(SERVICES.map((s) => s.id));
       const markets = new Set(MARKETS.map((m) => m.id));
+      // Default-on services that didn't exist when these prefs were saved start
+      // enabled; ones the viewer has already seen (and maybe switched off) don't.
+      const seen = new Set(Array.isArray(raw.seen) ? raw.seen : []);
+      const services = raw.services.filter((id) => known.has(id));
+      const added = DEFAULT_SERVICES.filter((id) => !seen.has(id) && !services.includes(id));
       return {
-        services: raw.services.filter((id) => known.has(id)),
+        services: [...added, ...services],
         market: markets.has(raw.market) ? raw.market : 'auto',
       };
     }
   } catch {
     // Storage blocked or corrupt: fall through to defaults.
   }
-  return { services: [], market: 'auto' };
+  return { services: [...DEFAULT_SERVICES], market: 'auto' };
 }
 
 function savePrefs(prefs) {
   try {
-    localStorage.setItem(PREFS_KEY, JSON.stringify(prefs));
+    // `seen` records which options existed, so new default-on ones can be told apart.
+    localStorage.setItem(PREFS_KEY, JSON.stringify({ ...prefs, seen: SERVICES.map((s) => s.id) }));
   } catch {
     // Private mode etc. — the picker still works for this page view.
   }
@@ -139,6 +173,15 @@ export function pieSvg(fraction, { size = 44, thickness = 6 } = {}) {
              stroke-dasharray="${(f * c).toFixed(2)} ${c.toFixed(2)}" transform="rotate(-90 ${mid} ${mid})"/>`;
   return `<svg class="pie" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" aria-hidden="true">
     <circle class="pie-track" cx="${mid}" cy="${mid}" r="${r}" stroke-width="${thickness}"/>${fill}</svg>`;
+}
+
+/**
+ * A donut with `labelHtml` centred inside it. `attrs` go on the wrapper: decorative
+ * by default, pass role/aria-label when the pie is the only label for its value.
+ */
+export function pieWithLabel(fraction, labelHtml, { size, thickness, className = '', attrs = 'aria-hidden="true"' }) {
+  return `<span class="pie-wrap ${className}" style="width:${size}px;height:${size}px" ${attrs}>
+    ${pieSvg(fraction, { size, thickness })}<span class="pie-label">${labelHtml}</span></span>`;
 }
 
 export const percent = (fraction) => `${Math.round(fraction * 100)}%`;

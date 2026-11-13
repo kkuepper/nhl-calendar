@@ -1,6 +1,10 @@
 #!/usr/bin/env node
-// Fetches the current NHL season for all 32 teams from the public NHL web API
-// and writes one compact file the static site reads: site/data/schedule.json.
+// Fetches NHL schedules with Canadian broadcasters from the public NHL web API
+// and writes the files the static site reads:
+//
+//   site/data/schedule.json  the current season, all 32 teams (refreshed every run)
+//   site/data/history.json   the previous HISTORY_SEASONS regular seasons (fetched
+//                            once and cached; finished seasons don't change)
 //
 // The API (api-web.nhle.com) is unofficial and sends no CORS headers, so the
 // browser can't call it directly — this script runs at build time instead.
@@ -11,15 +15,22 @@ import { fileURLToPath } from 'node:url';
 
 const API = 'https://api-web.nhle.com/v1';
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-const OUT = join(ROOT, 'site', 'data', 'schedule.json');
+const SCHEDULE_OUT = join(ROOT, 'site', 'data', 'schedule.json');
+const HISTORY_OUT = join(ROOT, 'site', 'data', 'history.json');
 
 // Regular season (2) and playoffs (3). Preseason (1) and exhibition games are skipped.
 const GAME_TYPES = new Set([2, 3]);
+// Past seasons are compared on regular-season games only.
+const HISTORY_GAME_TYPE = 2;
+const HISTORY_SEASONS = 4;
+// Bump when canadianBroadcasts/normalizeNetwork or the compact format changes,
+// so cached seasons are re-fetched with the new transform.
+const HISTORY_VERSION = 2;
 // Only Canadian broadcasts are kept; the site is about the Canadian TV market.
 const COUNTRY = 'CA';
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-
+const POLITE_DELAY_MS = 600; // the API rate-limits bursts
 const MAX_ATTEMPTS = 7;
 
 async function getJson(path, attempt = 1) {
@@ -33,9 +44,25 @@ async function getJson(path, attempt = 1) {
       await sleep(wait);
       return getJson(path, attempt + 1);
     }
-    throw new Error(`HTTP ${res.status} for ${path}`);
+    const err = new Error(`HTTP ${res.status} for ${path}`);
+    err.status = res.status;
+    throw err;
   }
   return res.json();
+}
+
+const readJson = (file) => readFile(file, 'utf8').then(JSON.parse).catch(() => null);
+
+// "SN (JIP)" = Sportsnet joined the game in progress; same channel for our purposes.
+const normalizeNetwork = (network) => network.replace(/\s*\(JIP\)$/i, '').trim();
+
+function canadianBroadcasts(g) {
+  return (g.tvBroadcasts ?? [])
+    .filter((b) => b.countryCode === COUNTRY)
+    .sort((a, b) => a.sequenceNumber - b.sequenceNumber)
+    .map((b) => ({ network: normalizeNetwork(b.network), market: b.market }))
+    // Normalizing can make "SN" and "SN (JIP)" identical; keep one.
+    .filter((b, i, all) => all.findIndex((o) => o.network === b.network && o.market === b.market) === i);
 }
 
 function toTeam(s) {
@@ -65,10 +92,7 @@ function toGame(g) {
     away: g.awayTeam.abbrev,
     venue: g.venue?.default ?? null,
     state: g.gameState,
-    tv: (g.tvBroadcasts ?? [])
-      .filter((b) => b.countryCode === COUNTRY)
-      .sort((a, b) => a.sequenceNumber - b.sequenceNumber)
-      .map((b) => ({ network: b.network, market: b.market })),
+    tv: canadianBroadcasts(g),
   };
   if (g.gameScheduleState && g.gameScheduleState !== 'OK') game.schedule = g.gameScheduleState;
   if (typeof g.homeTeam.score === 'number') {
@@ -77,11 +101,16 @@ function toGame(g) {
   return game;
 }
 
-async function main() {
-  const standings = await getJson('/standings/now');
-  const teams = standings.standings.map(toTeam).sort((a, b) => a.name.localeCompare(b.name));
-  if (teams.length < 30) throw new Error(`Expected 32 teams, got ${teams.length}`);
+function logNetworks(label, games) {
+  const counts = new Map();
+  for (const g of games) for (const b of g.tv) counts.set(b.network, (counts.get(b.network) ?? 0) + 1);
+  const list = [...counts].sort((a, b) => b[1] - a[1]).map(([n, c]) => `${n}:${c}`).join(' ');
+  console.log(`${label} — Canadian networks seen: ${list}`);
+}
 
+// ---------------------------------------------------------------- current season
+
+async function updateSchedule(teams) {
   const games = new Map();
   for (const team of teams) {
     const sched = await getJson(`/club-schedule-season/${team.abbrev}/now`);
@@ -93,30 +122,27 @@ async function main() {
       kept++;
     }
     console.log(`${team.abbrev.padEnd(3)} ${String(kept).padStart(3)} games`);
-    await sleep(600); // be polite to the API; it rate-limits bursts
+    await sleep(POLITE_DELAY_MS);
   }
 
   const sorted = [...games.values()].sort((a, b) => a.start.localeCompare(b.start) || a.id - b.id);
   const seasons = [...new Set(sorted.map((g) => g.season))];
   const content = { season: seasons.at(-1) ?? null, country: COUNTRY, teams, games: sorted };
 
-  const networks = new Map();
-  for (const g of sorted) for (const b of g.tv) networks.set(b.network, (networks.get(b.network) ?? 0) + 1);
-  const list = [...networks].sort((a, b) => b[1] - a[1]).map(([n, c]) => `${n}:${c}`).join(' ');
   console.log(`\n${sorted.length} games for ${teams.length} teams`);
-  console.log(`Canadian networks seen: ${list}`);
+  logNetworks('Current season', sorted);
 
   // Only rewrite the file when the schedule itself changed, so `updatedAt`
-  // means "last change" and the daily job doesn't commit identical data.
-  const previous = await readFile(OUT, 'utf8').then(JSON.parse).catch(() => null);
+  // means "last change" and the scheduled job doesn't commit identical data.
+  const previous = await readJson(SCHEDULE_OUT);
   if (previous && JSON.stringify(stripMeta(previous)) === JSON.stringify(content)) {
-    console.log(`No changes since ${previous.updatedAt}; ${OUT} left as is.`);
-    return;
+    console.log(`No changes since ${previous.updatedAt}; ${SCHEDULE_OUT} left as is.`);
+  } else {
+    await mkdir(dirname(SCHEDULE_OUT), { recursive: true });
+    await writeFile(SCHEDULE_OUT, serialize({ updatedAt: new Date().toISOString(), source: API, ...content }));
+    console.log(`Wrote ${SCHEDULE_OUT}`);
   }
-
-  await mkdir(dirname(OUT), { recursive: true });
-  await writeFile(OUT, serialize({ updatedAt: new Date().toISOString(), source: `${API}`, ...content }));
-  console.log(`Wrote ${OUT}`);
+  return content.season;
 }
 
 function stripMeta({ updatedAt, source, ...rest }) {
@@ -132,6 +158,101 @@ function serialize(data) {
     return `${JSON.stringify(key)}:${JSON.stringify(value)}`;
   });
   return `{${parts.join(',\n')}}\n`;
+}
+
+// ---------------------------------------------------------------- past seasons
+
+/** 20262027 → [20252026, 20242025, …] */
+function previousSeasons(season, count) {
+  const start = Math.floor(Number(season) / 10000);
+  return Array.from({ length: count }, (_, i) => String((start - 1 - i) * 10000 + (start - i)));
+}
+
+async function fetchPastSeason(teams, season) {
+  const games = new Map();
+  for (const team of teams) {
+    let sched;
+    try {
+      sched = await getJson(`/club-schedule-season/${team.abbrev}/${season}`);
+    } catch (err) {
+      // Teams that didn't exist yet (e.g. Utah before 2024–25) have no schedule.
+      if (err.status === 404) {
+        console.log(`  ${team.abbrev} ${season}: no schedule`);
+        continue;
+      }
+      throw err;
+    }
+    for (const g of sched.games ?? []) {
+      if (g.gameType !== HISTORY_GAME_TYPE) continue;
+      games.set(g.id, { start: g.startTimeUTC, home: g.homeTeam.abbrev, away: g.awayTeam.abbrev, tv: canadianBroadcasts(g) });
+    }
+    await sleep(POLITE_DELAY_MS);
+  }
+
+  // Every team plays the same number of regular-season games. A team with fewer
+  // means some schedules came back empty or partial: don't cache the season, so
+  // the next run retries it. (A team's own empty response is harmless as long as
+  // its opponents' schedules still list all its games.)
+  const perTeam = new Map();
+  for (const g of games.values()) for (const t of [g.home, g.away]) perTeam.set(t, (perTeam.get(t) ?? 0) + 1);
+  const counts = [...perTeam.values()];
+  if (!counts.length || Math.min(...counts) !== Math.max(...counts)) {
+    const range = counts.length ? `${Math.min(...counts)}–${Math.max(...counts)}` : 'none';
+    console.warn(`  ${season}: looks incomplete (games per team: ${range}); not caching it, will retry next run.`);
+    return null;
+  }
+
+  const sorted = [...games.values()].sort((a, b) => a.start.localeCompare(b.start));
+  console.log(`  ${season}: ${sorted.length} games`);
+  logNetworks(`  ${season}`, sorted);
+  // Compact form: [home, away, ["NETWORK:MARKET", …]]
+  return sorted.map((g) => [g.home, g.away, g.tv.map((b) => `${b.network}:${b.market}`)]);
+}
+
+async function updateHistory(teams, currentSeason) {
+  const wanted = previousSeasons(currentSeason, HISTORY_SEASONS);
+  const previous = await readJson(HISTORY_OUT);
+  // A cache written by an older transform is discarded and fetched again.
+  const current = previous?.version === HISTORY_VERSION;
+  const cached = current ? (previous.seasons ?? {}) : {};
+
+  const seasons = {};
+  for (const season of wanted) {
+    if (cached[season]) {
+      seasons[season] = cached[season];
+    } else {
+      console.log(`\nFetching past season ${season}…`);
+      const fetched = await fetchPastSeason(teams, season);
+      if (fetched) seasons[season] = fetched;
+    }
+  }
+
+  const sameSeasons = JSON.stringify(Object.keys(cached).sort()) === JSON.stringify(Object.keys(seasons).sort());
+  if (current && sameSeasons) {
+    console.log(`Past seasons ${Object.keys(seasons).join(', ')} cached; ${HISTORY_OUT} left as is.`);
+    return;
+  }
+
+  const body = wanted
+    .filter((s) => seasons[s])
+    .map((s) => `${JSON.stringify(s)}:[\n${seasons[s].map((g) => JSON.stringify(g)).join(',\n')}\n]`)
+    .join(',\n');
+  await writeFile(
+    HISTORY_OUT,
+    `{"version":${HISTORY_VERSION},"format":"[home, away, [\\"NETWORK:MARKET\\", ...]] per regular-season game; markets N/H/A","seasons":{\n${body}\n}}\n`,
+  );
+  console.log(`Wrote ${HISTORY_OUT}`);
+}
+
+// ---------------------------------------------------------------- main
+
+async function main() {
+  const standings = await getJson('/standings/now');
+  const teams = standings.standings.map(toTeam).sort((a, b) => a.name.localeCompare(b.name));
+  if (teams.length < 30) throw new Error(`Expected 32 teams, got ${teams.length}`);
+
+  const season = await updateSchedule(teams);
+  if (season) await updateHistory(teams, season);
 }
 
 main().catch((err) => {

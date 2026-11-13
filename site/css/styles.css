@@ -279,6 +279,23 @@ h1, h2, h3 { line-height: 1.2; margin: 0; }
 .pie-track { fill: none; stroke: var(--track); }
 .pie-fill { fill: none; stroke: var(--accent); stroke-linecap: round; }
 
+/* pieWithLabel(): size comes from an inline style; label size per variant below */
+.pie-wrap { position: relative; display: block; flex: none; }
+
+.pie-label {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  line-height: 1;
+  font-weight: 800;
+  letter-spacing: -.02em;
+  font-variant-numeric: tabular-nums;
+}
+
 /* ---------------------------------------------------------------- team grid (home) */
 
 .division { margin-bottom: 32px; }
@@ -361,22 +378,7 @@ h1, h2, h3 { line-height: 1.2; margin: 0; }
   font-variant-numeric: tabular-nums;
 }
 
-.team-card-pie {
-  position: relative;
-  width: 58px;
-  height: 58px;
-}
-
-.team-card-pct {
-  position: absolute;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  font-size: .85rem;
-  font-weight: 750;
-  letter-spacing: -.02em;
-  font-variant-numeric: tabular-nums;
-}
+.team-card-pie .pie-label { font-size: .85rem; font-weight: 750; }
 
 /* ---------------------------------------------------------------- team hero */
 
@@ -437,38 +439,18 @@ h1, h2, h3 { line-height: 1.2; margin: 0; }
   align-items: center;
   gap: 28px;
   padding: 24px;
-  margin-bottom: 36px;
+  margin-bottom: 20px;
 }
 
 .coverage:empty { display: none; }
 
-.coverage-pie {
-  position: relative;
-  width: 148px;
-  height: 148px;
-}
+.coverage-pie .pie-label strong { font-size: 2.1rem; letter-spacing: -.03em; }
 
-.coverage-pct {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-}
-
-.coverage-pct strong {
-  font-size: 2.1rem;
-  font-weight: 800;
-  letter-spacing: -.03em;
-  line-height: 1;
-  font-variant-numeric: tabular-nums;
-}
-
-.coverage-pct span {
+.coverage-pie .pie-label span {
   margin-top: 4px;
   font-size: .78rem;
+  font-weight: 400;
+  letter-spacing: 0;
   color: var(--muted);
 }
 
@@ -517,6 +499,55 @@ h1, h2, h3 { line-height: 1.2; margin: 0; }
 .suggest-gain {
   color: var(--ok);
   font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------------------------------------------------------------- past seasons */
+
+.history {
+  padding: 20px 24px 24px;
+  margin-bottom: 36px;
+}
+
+.history[hidden] { display: none; }
+
+.history-head {
+  margin-bottom: 18px;
+}
+
+.history-title { font-size: 1.05rem; }
+
+.history-head p { margin: 4px 0 0; max-width: 640px; }
+
+.history-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.history-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  text-align: center;
+}
+
+.history-pie .pie-label { font-size: 1.15rem; }
+
+.history-label {
+  display: flex;
+  flex-direction: column;
+}
+
+.history-label strong { font-size: .95rem; }
+
+.history-label span {
+  font-size: .78rem;
+  color: var(--muted);
   font-variant-numeric: tabular-nums;
 }
 
@@ -601,9 +632,7 @@ h1, h2, h3 { line-height: 1.2; margin: 0; }
 
 .game-opp-name {
   font-weight: 550;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  line-height: 1.3;
 }
 
 .game-venue {
@@ -741,6 +770,9 @@ h1, h2, h3 { line-height: 1.2; margin: 0; }
   .hero-inner { gap: 14px; padding-top: 20px; padding-bottom: 20px; }
   .hero-logo { width: 80px; height: 80px; }
   .hero-logo img { width: 62px; height: 62px; }
+
+  .history { padding: 16px; }
+  .history-list { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: 20px; }
 
   .prefs { padding: 16px; }
   .market { width: 100%; }

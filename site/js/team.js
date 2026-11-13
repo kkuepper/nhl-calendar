@@ -1,12 +1,13 @@
-import { MARKETS, suggestions, teamCoverage } from './coverage.js';
+import { MARKETS, seasonCoverage, suggestions, teamCoverage } from './coverage.js';
 import {
   esc,
   loadData,
+  loadHistory,
   loadPrefs,
   logoHtml,
   mountPicker,
   percent,
-  pieSvg,
+  pieWithLabel,
   seasonLabel,
   showError,
   teamColorStyle,
@@ -14,6 +15,7 @@ import {
 } from './ui.js';
 
 const INITIAL_GAMES = 10;
+const MAX_PAST_SEASONS = 4;
 
 const dateFmt = new Intl.DateTimeFormat(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
 const timeFmt = new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit', timeZoneName: 'short' });
@@ -41,13 +43,16 @@ async function main() {
     return;
   }
 
+  // Only fetched for a real team; past seasons arrive after the page is usable.
+  const historyPromise = loadHistory();
   document.title = `${team.name} · NHL on Canadian TV`;
   renderHero(team, data);
 
-  const state = { prefs: loadPrefs(), expanded: false };
+  const state = { prefs: loadPrefs(), expanded: false, history: [] };
   const render = () => {
     const cov = teamCoverage(data.games, team.abbrev, state.prefs);
     renderCoverage(team, data, state.prefs, cov);
+    renderHistory(team, state.history, state.prefs);
     renderGames(gamesEl, team, data, state, cov, render);
   };
 
@@ -56,6 +61,43 @@ async function main() {
     render();
   });
   render();
+
+  state.history = await historyPromise;
+  renderHistory(team, state.history, state.prefs);
+}
+
+function renderHistory(team, history, prefs) {
+  const el = document.getElementById('history');
+  const seasons = history
+    .map(({ season, games }) => ({ season, cov: seasonCoverage(games, team.abbrev, prefs) }))
+    .filter(({ cov }) => cov.total > 0) // e.g. Utah before 2024–25
+    .slice(0, MAX_PAST_SEASONS);
+
+  el.hidden = seasons.length === 0;
+  if (!seasons.length) return;
+
+  const has = prefs.services.length > 0;
+  const items = seasons.map(({ season, cov }) => {
+    const label = seasonLabel(season);
+    const value = has ? percent(cov.fraction) : '–';
+    const detail = has ? `${cov.watchable} of ${cov.total} games` : `${cov.total} games`;
+    const aria = has ? `${label}: ${cov.watchable} of ${cov.total} games watchable (${value})` : `${label}: ${cov.total} games`;
+    return `
+      <li class="history-item" aria-label="${esc(aria)}">
+        ${pieWithLabel(has ? cov.fraction : null, value, { size: 92, thickness: 10, className: 'history-pie' })}
+        <div class="history-label" aria-hidden="true">
+          <strong>${esc(label)}</strong>
+          <span>${esc(detail)}</span>
+        </div>
+      </li>`;
+  });
+
+  el.innerHTML = `
+    <div class="history-head">
+      <h2 class="history-title" id="history-title">Past seasons</h2>
+      <p class="muted small">Same subscriptions and region, applied to each full regular season. Until 2025–26, CBC and Citytv carried Saturday games — those count under Free TV.</p>
+    </div>
+    <ol class="history-list">${items.join('')}</ol>`;
 }
 
 function renderHero(team, data) {
@@ -107,13 +149,16 @@ function renderCoverage(team, data, prefs, cov) {
     : '';
 
   el.innerHTML = `
-    <div class="coverage-pie" role="img" aria-label="${has ? `${percent(cov.fraction)} of remaining games watchable` : 'No subscriptions selected'}">
-      ${pieSvg(has ? cov.fraction : null, { size: 148, thickness: 16 })}
-      <div class="coverage-pct" aria-hidden="true">
-        <strong>${has ? percent(cov.fraction) : '–'}</strong>
-        <span>${has ? 'watchable' : 'pick below'}</span>
-      </div>
-    </div>
+    ${pieWithLabel(
+      has ? cov.fraction : null,
+      `<strong>${has ? percent(cov.fraction) : '–'}</strong><span>${has ? 'watchable' : 'pick below'}</span>`,
+      {
+        size: 148,
+        thickness: 16,
+        className: 'coverage-pie',
+        attrs: `role="img" aria-label="${has ? `${percent(cov.fraction)} of remaining games watchable` : 'No subscriptions selected'}"`,
+      },
+    )}
     <div class="coverage-body">
       <p class="coverage-lead">${lead}</p>
       <p class="coverage-market">${marketSentence(cov, data)}</p>

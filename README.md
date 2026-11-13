@@ -6,6 +6,7 @@ Every NHL team's upcoming games, the Canadian channels carrying them, and how ma
 
 - **Landing page**: all 32 teams by division. Each shows a coverage pie: the share of its remaining games you can watch with your subscriptions.
 - **Team page**: the full coverage breakdown, which subscription would add the most games, and the upcoming schedule (the next 10 games, expandable to the whole season). Each game shows its Canadian broadcasters, tagged *regional*, *blacked out* or *out-of-market*.
+- **Past seasons**: up to four more pies on the team page. They apply the same subscriptions and region to each of the last four full regular seasons, so you can see how coverage has shifted. Example: when CBC stopped airing NHL games after 2025–26.
 - Your subscriptions and "where you watch" are saved in the browser (localStorage) and shared between pages.
 
 ## How "watchable" is decided
@@ -27,6 +28,7 @@ Maintained by hand in [`site/js/coverage.js`](site/js/coverage.js) for the 2026�
 
 | Subscription | Network codes |
 |---|---|
+| Free TV (CBC/CITY), on by default | `CBC` `CITY`: over the air; Saturday games until 2025–26, none since |
 | Sportsnet (TV package) | `SN` `SN1` `SN360` `SNO` `SNE` `SNW` `SNP` |
 | Sportsnet+ Standard | Sportsnet channels + `SN+` (Monday Night Hockey and other streaming exclusives) |
 | Sportsnet+ Premium | Standard + out-of-market games |
@@ -35,12 +37,14 @@ Maintained by hand in [`site/js/coverage.js`](site/js/coverage.js) for the 2026�
 | TVA Sports | `TVAS` `TVAS2` `TVAS-D` |
 | Prime Video | `Prime` |
 
+Older codes from past seasons are folded in too: `SNF`, `SNOL` (Sportsnet), `FX-CA` (Sportsnet overflow) and `… (JIP)` (join-in-progress) variants.
+
 Unknown codes are shown as-is and not counted. The fetch script prints every code it sees, so new ones are easy to spot.
 
 **Known simplifications**
 
 - Regional territories overlap in reality (for example Saskatchewan or Atlantic Canada); the site models one region at a time.
-- CBC isn't listed by the API. Hockey Night in Canada games show up as Sportsnet (`SN`/`SNE`).
+- Past seasons use **today's** packages. For example, Sportsnet+ Premium's out-of-market games are applied to seasons where that feature was sold under another name.
 - Package details (e.g. which Sportsnet+ tier has which streaming exclusives) change between seasons, so check the mapping each fall.
 
 ## Data
@@ -50,7 +54,12 @@ Unknown codes are shown as-is and not counted. The fetch script prints every cod
 - `/v1/standings/now` for the 32 teams, divisions and logos
 - `/v1/club-schedule-season/{TEAM}/now` for each team's season, including `tvBroadcasts`
 
-It writes [`site/data/schedule.json`](site/data/schedule.json): regular season and playoffs, Canadian broadcasts only, one game per line so diffs stay readable. The file is only rewritten when the schedule actually changes, so `updatedAt` means "last change".
+It writes two files:
+
+- [`site/data/schedule.json`](site/data/schedule.json): the current season's regular season and playoffs. Canadian broadcasts only, one game per line so diffs stay readable. It's only rewritten when the schedule actually changes, so `updatedAt` means "last change".
+- [`site/data/history.json`](site/data/history.json): the previous four regular seasons in compact form. Finished seasons don't change, so they're fetched once and cached. Only a newly finished season is downloaded, at the next rollover.
+
+The API has Canadian broadcasters for every season back to **2006–07**. Codes before 2014–15 come from the previous rights era (`SNET-O (HD)`, `LEAFS TV`, national `TSN`), so they don't map onto today's subscriptions.
 
 The API sends no CORS headers, so the browser can't call it directly. That's why the data is fetched at build time.
 
@@ -59,7 +68,7 @@ The API sends no CORS headers, so the browser can't call it directly. That's why
 Requires Node 20+ (for the fetch script) and Python 3 (for a static file server).
 
 ```bash
-npm run fetch   # refresh site/data/schedule.json
+npm run fetch   # refresh site/data/schedule.json (and history.json if a season is missing)
 npm run serve   # http://localhost:8321
 ```
 
@@ -67,7 +76,7 @@ No dependencies, no build step: the site is plain HTML, CSS and ES modules in [`
 
 ## Deployment
 
-[`.github/workflows/deploy.yml`](.github/workflows/deploy.yml) runs on every push to `main` and twice a day (05:17 and 16:17 ET). It fetches the latest schedule, commits `schedule.json` if it changed, and deploys `site/` to GitHub Pages.
+[`.github/workflows/deploy.yml`](.github/workflows/deploy.yml) runs on every push to `main` and twice a day (05:17 and 16:17 ET). It fetches the latest schedule, commits `site/data/` if anything changed, and deploys `site/` to GitHub Pages.
 
 GitHub pauses scheduled workflows after 60 days without repository activity. During the season, the data commits keep it active. If it gets paused in the off-season, re-enable it under *Actions → Update data and deploy*.
 

@@ -6,7 +6,7 @@ import {
   logoHtml,
   mountPicker,
   percent,
-  pieSvg,
+  pieWithLabel,
   seasonLabel,
   showError,
   teamColorStyle,
@@ -66,11 +66,14 @@ function renderTeams(container, data, prefs) {
     }
   }
 
+  const coverage = new Map(data.teams.map((t) => [t.abbrev, teamCoverage(data.games, t.abbrev, prefs, now)]));
+  const anyWatchable = [...coverage.values()].some((c) => c.watchable > 0);
+
   const sections = divisions.map((division) => {
     const teams = data.teams
       .filter((t) => t.division === division.name)
       .sort((a, b) => a.name.localeCompare(b.name));
-    const cards = teams.map((team) => teamCard(team, teamCoverage(data.games, team.abbrev, prefs, now), hasServices));
+    const cards = teams.map((team) => teamCard(team, coverage.get(team.abbrev), hasServices));
     return `
       <section class="division" aria-labelledby="div-${esc(division.name)}">
         <h2 class="division-title" id="div-${esc(division.name)}">
@@ -80,9 +83,11 @@ function renderTeams(container, data, prefs) {
       </section>`;
   });
 
-  const hint = hasServices
-    ? ''
-    : '<p class="empty-hint">Select your subscriptions above to see how many games you can watch.</p>';
+  const hint = !hasServices
+    ? '<p class="empty-hint">Select your subscriptions above to see how many games you can watch.</p>'
+    : !anyWatchable
+      ? '<p class="empty-hint">None of the remaining games air on what you’ve picked. Add your subscriptions above.</p>'
+      : '';
 
   container.innerHTML = hint + sections.join('');
 }
@@ -101,10 +106,7 @@ function teamCard(team, cov, hasServices) {
         <strong>${esc(team.common)}</strong>
         <small class="team-card-detail">${esc(detail)}</small>
       </span>
-      <span class="team-card-pie" aria-hidden="true">
-        ${pieSvg(hasServices ? cov.fraction : null, { size: 58, thickness: 6 })}
-        <span class="team-card-pct">${value}</span>
-      </span>
+      ${pieWithLabel(hasServices ? cov.fraction : null, value, { size: 58, thickness: 6, className: 'team-card-pie' })}
     </a>`;
 }
 

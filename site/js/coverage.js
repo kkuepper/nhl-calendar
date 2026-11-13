@@ -5,17 +5,29 @@
 //   N = national, H = home team's regional feed, A = away team's regional feed.
 // Regional feeds are blacked out outside that team's broadcast region.
 //
-// The mapping below is maintained by hand for the 2026–27 season. If a new code
-// shows up, it is displayed as-is and simply not counted for any subscription.
+// The mapping below is maintained by hand for the 2026–27 season, plus the
+// codes that appear in the past seasons shown on team pages (2022–23 onward).
+// If a new code shows up, it is displayed as-is and not counted for any subscription.
 
-const SPORTSNET_CHANNELS = ['SN', 'SN1', 'SN360', 'SNO', 'SNE', 'SNW', 'SNP'];
+// SNF / SNOL are rare alternate Sportsnet feeds seen in 2022–2026 data.
+const SPORTSNET_CHANNELS = ['SN', 'SN1', 'SN360', 'SNO', 'SNE', 'SNW', 'SNP', 'SNF', 'SNOL'];
 
 export const SERVICES = [
+  {
+    // The only over-the-air channels in the data (always national). They carried
+    // Saturday games until 2025–26; no NHL games air on CBC since 2026–27.
+    id: 'free',
+    name: 'Free TV (CBC/CITY)',
+    detail: 'Antenna or any TV package · no NHL games since 2025–26',
+    networks: ['CBC', 'CITY'],
+    defaultOn: true,
+  },
   {
     id: 'sportsnet',
     name: 'Sportsnet',
     detail: 'TV package (cable, satellite, IPTV)',
-    networks: SPORTSNET_CHANNELS,
+    // FX-CA: Rogers' FX channel, used once as Sportsnet overflow (2024–25).
+    networks: [...SPORTSNET_CHANNELS, 'FX-CA'],
   },
   {
     id: 'snplus',
@@ -69,7 +81,12 @@ const NETWORK_NAMES = {
   SNE: 'Sportsnet East',
   SNW: 'Sportsnet West',
   SNP: 'Sportsnet Pacific',
+  SNF: 'Sportsnet',
+  SNOL: 'Sportsnet',
   'SN+': 'Sportsnet+',
+  'FX-CA': 'FX',
+  CBC: 'CBC',
+  CITY: 'Citytv',
   TSN: 'TSN',
   TSN1: 'TSN1',
   TSN2: 'TSN2',
@@ -86,6 +103,9 @@ const NETWORK_NAMES = {
 };
 
 export const networkName = (code) => NETWORK_NAMES[code] ?? code;
+
+/** Services selected for first-time visitors. */
+export const DEFAULT_SERVICES = SERVICES.filter((s) => s.defaultOn).map((s) => s.id);
 
 export const CANADIAN_TEAMS = ['CGY', 'EDM', 'MTL', 'OTT', 'TOR', 'VAN', 'WPG'];
 
@@ -151,17 +171,12 @@ export function isUpcoming(game, now = Date.now()) {
   return Date.parse(game.start) + GAME_LENGTH_MS > now;
 }
 
-export function upcomingGames(games, abbrev, now = Date.now()) {
-  return games.filter((g) => (g.home === abbrev || g.away === abbrev) && isUpcoming(g, now));
-}
-
-/** Coverage of a team's upcoming games for the given preferences. */
-export function teamCoverage(games, abbrev, prefs, now = Date.now()) {
+/** Coverage of a team's games in `games` for the given preferences. */
+function coverageOf(games, abbrev, prefs) {
   const market = viewerMarket(prefs.market, abbrev);
-  const rows = upcomingGames(games, abbrev, now).map((game) => ({
-    game,
-    coverage: gameCoverage(game, market, prefs.services),
-  }));
+  const rows = games
+    .filter((g) => g.home === abbrev || g.away === abbrev)
+    .map((game) => ({ game, coverage: gameCoverage(game, market, prefs.services) }));
   const watchable = rows.filter((r) => r.coverage.watchable).length;
   return {
     market,
@@ -171,6 +186,14 @@ export function teamCoverage(games, abbrev, prefs, now = Date.now()) {
     fraction: rows.length ? watchable / rows.length : 0,
   };
 }
+
+/** Coverage of a team's upcoming games. */
+export function teamCoverage(games, abbrev, prefs, now = Date.now()) {
+  return coverageOf(games.filter((g) => isUpcoming(g, now)), abbrev, prefs);
+}
+
+/** Coverage of all of a team's games in a finished season (from history.json). */
+export const seasonCoverage = coverageOf;
 
 /** Services the viewer doesn't have, ranked by how many extra games each would add. */
 export function suggestions(games, abbrev, prefs, now = Date.now()) {
