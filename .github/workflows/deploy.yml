@@ -45,6 +45,10 @@ jobs:
             git push
           fi
 
+      # Generated from schedule.json on every deploy; not committed.
+      - name: Build calendar feeds
+        run: node scripts/build-calendars.mjs
+
       - uses: actions/configure-pages@v5
 
       - uses: actions/upload-pages-artifact@v4

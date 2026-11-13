@@ -1,4 +1,5 @@
-import { MARKETS, seasonCoverage, suggestions, teamCoverage } from './coverage.js';
+import { MARKETS, SERVICES, seasonCoverage, suggestions, teamCoverage } from './coverage.js';
+import { feedPath, feedSelection, plainFeedPath } from './feeds.js';
 import {
   esc,
   loadData,
@@ -47,12 +48,14 @@ async function main() {
   const historyPromise = loadHistory();
   document.title = `${team.name} · NHL on Canadian TV`;
   renderHero(team, data);
+  const calendar = mountCalendar(team);
 
   const state = { prefs: loadPrefs(), expanded: false, history: [] };
   const render = () => {
     const cov = teamCoverage(data.games, team.abbrev, state.prefs);
     renderCoverage(team, data, state.prefs, cov);
     renderHistory(team, state.history, state.prefs);
+    calendar.update(state.prefs);
     renderGames(gamesEl, team, data, state, cov, render);
   };
 
@@ -98,6 +101,98 @@ function renderHistory(team, history, prefs) {
       <p class="muted small">Same subscriptions and region, applied to each full regular season. Until 2025–26, CBC and Citytv carried Saturday games — those count under Free TV.</p>
     </div>
     <ol class="history-list">${items.join('')}</ol>`;
+}
+
+/**
+ * The "Add to your calendar" card. Feeds are static files built by
+ * scripts/build-calendars.mjs, one per subscription combination (see feeds.js);
+ * `update(prefs)` points every link at the feed for the current selection.
+ */
+function mountCalendar(team) {
+  const el = document.getElementById('calendar');
+  el.innerHTML = `
+    <div class="calendar-head">
+      <h2 class="calendar-title" id="calendar-title">Add the schedule to your calendar</h2>
+      <p class="muted small">Every ${esc(team.common)} game this season with its Canadian channel in the title. Subscribe once and your calendar picks up schedule and broadcaster changes by itself. Google checks every few hours, sometimes only once a day.</p>
+    </div>
+    <p class="calendar-for"></p>
+    <fieldset class="calendar-modes">
+      <legend class="sr-only">Games you can’t watch</legend>
+      <label><input type="radio" name="calendar-mode" value="mark" checked> Show them, marked 🚫</label>
+      <label><input type="radio" name="calendar-mode" value="only"> Leave them out</label>
+    </fieldset>
+    <div class="calendar-actions">
+      <a class="btn btn-primary" data-link="google" target="_blank" rel="noopener">Google Calendar</a>
+      <a class="btn" data-link="webcal">Apple Calendar / Outlook</a>
+      <a class="btn" data-link="download">Download .ics</a>
+    </div>
+    <div class="calendar-url">
+      <label class="calendar-url-label" for="calendar-url">Feed URL for any other calendar app</label>
+      <div class="calendar-url-row">
+        <input id="calendar-url" type="text" readonly>
+        <button type="button" class="btn calendar-copy">Copy</button>
+      </div>
+    </div>
+    <p class="calendar-note muted small"></p>`;
+  el.hidden = false;
+
+  const $ = (sel) => el.querySelector(sel);
+  const input = $('#calendar-url');
+  const copy = $('.calendar-copy');
+  let prefs = { services: [], market: 'auto' };
+  let mode = 'mark';
+
+  function update(nextPrefs = prefs) {
+    prefs = nextPrefs;
+    const personal = prefs.services.length > 0;
+    const selection = feedSelection(prefs.services, team.abbrev);
+    const path = personal ? feedPath(team.abbrev, selection, mode) : plainFeedPath(team.abbrev);
+    const feed = new URL(path, location.href).href;
+    const webcal = feed.replace(/^https?:/, 'webcal:');
+
+    $('[data-link="google"]').href = `https://calendar.google.com/calendar/r?cid=${encodeURIComponent(webcal)}`;
+    $('[data-link="webcal"]').href = webcal;
+    const download = $('[data-link="download"]');
+    download.href = feed;
+    download.download = personal ? `${team.abbrev}-${path.split('/').pop()}` : `${team.abbrev}.ics`;
+    input.value = feed;
+
+    const names = selection.map((id) => SERVICES.find((s) => s.id === id).name);
+    $('.calendar-for').innerHTML = !personal
+      ? 'Pick your subscriptions above to personalise the feed. Until then it lists every game with all its channels.'
+      : names.length
+        ? `Personalised for <strong>${esc(names.join(', '))}</strong>. Games you can’t watch with these:`
+        : `None of your subscriptions carry ${esc(team.common)} games. Games you can’t watch:`;
+    $('.calendar-modes').hidden = !personal;
+
+    const notes = [];
+    if (personal) notes.push('Each subscription combination has its own feed: if yours change, subscribe to the new link.');
+    if (personal && prefs.market !== 'auto') {
+      notes.push('Feeds always assume you watch from the team’s home market; “Where you watch” only applies on this page.');
+    }
+    $('.calendar-note').textContent = notes.join(' ');
+    $('.calendar-note').hidden = notes.length === 0;
+  }
+
+  for (const radio of el.querySelectorAll('input[name="calendar-mode"]')) {
+    radio.addEventListener('change', () => {
+      mode = radio.value;
+      update();
+    });
+  }
+  input.addEventListener('focus', () => input.select());
+  copy.addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(input.value);
+      copy.textContent = 'Copied';
+    } catch {
+      input.focus();
+      copy.textContent = 'Press ⌘C / Ctrl+C';
+    }
+    setTimeout(() => (copy.textContent = 'Copy'), 2000);
+  });
+
+  return { update };
 }
 
 function renderHero(team, data) {

@@ -49,12 +49,15 @@ export const SERVICES = [
     name: 'TSN',
     detail: 'TV package or TSN+ · regional Canadiens, Senators, Jets, Maple Leafs',
     networks: ['TSN', 'TSN1', 'TSN2', 'TSN3', 'TSN4', 'TSN5'],
+    // Only carries NHL games as these teams' regional broadcaster.
+    regionalTeams: ['MTL', 'OTT', 'TOR', 'WPG'],
   },
   {
     id: 'rds',
     name: 'RDS',
     detail: 'French · TV package or RDS Direct',
     networks: ['RDS', 'RDS2', 'RDSI'],
+    regionalTeams: ['MTL', 'OTT'],
   },
   {
     id: 'tva',
