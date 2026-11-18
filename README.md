@@ -105,6 +105,8 @@ Subscribing:
 | Apple Calendar, Outlook desktop | The `webcal://` link opens the app's subscribe dialog. |
 | Anything else | Copy the feed URL from the team page and add it as a calendar URL. |
 
+The Google, Apple/Outlook, and download buttons each send one Palmeta count. The script stores a name, not extra fields, so the name is `cal_<team>_<method>_<feed>`: the team abbreviation, `google`, `webcal`, or `download`, and `plain`, `personal`, or `personal_only` (the feed that leaves out games you can't watch). The link still opens if analytics has not loaded.
+
 ## Run locally
 
 Requires Node 20+ (for the fetch script) and Python 3 (for a static file server).

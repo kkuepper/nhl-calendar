@@ -232,6 +232,15 @@ function mountCalendar(team) {
       update();
     });
   }
+  for (const link of el.querySelectorAll('[data-link]')) {
+    link.addEventListener('click', () => {
+      const method = link.getAttribute('data-link');
+      if (method !== 'google' && method !== 'webcal' && method !== 'download') return;
+      const personal = prefs.services.length > 0;
+      const feed = !personal ? 'plain' : mode === 'only' ? 'personal_only' : 'personal';
+      trackCalendarSubscribe(team.abbrev, method, feed);
+    });
+  }
   input.addEventListener('focus', () => input.select());
   copy.addEventListener('click', async () => {
     try {
@@ -245,6 +254,28 @@ function mountCalendar(team) {
   });
 
   return { update };
+}
+
+/**
+ * One click on a subscribe button. Palmeta stores a name and a count, so the
+ * team, button, and feed are the name: cal_tor_google_plain. personal_only is
+ * the "leave them out" feed (a hyphen is not a legal event name).
+ * A missing script, or a throw, does not stop the link.
+ */
+function trackCalendarSubscribe(abbrev, method, feed) {
+  const name = `cal_${String(abbrev).toLowerCase()}_${method}_${feed}`;
+  if (!/^[a-z][a-z0-9_]{0,31}$/.test(name)) return;
+  try {
+    if (typeof window.palmetaAnalytics !== 'function') {
+      window.palmetaAnalytics = function (command, value) {
+        ;(window.palmetaAnalytics.q = window.palmetaAnalytics.q || []).push([command, value]);
+      };
+      window.palmetaAnalytics.q = window.palmetaAnalytics.q || [];
+    }
+    window.palmetaAnalytics('event', { name, count: 1 });
+  } catch {
+    // The subscribe link still opens.
+  }
 }
 
 function renderHero(team, data) {
