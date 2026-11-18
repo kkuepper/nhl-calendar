@@ -1,4 +1,4 @@
-import { MARKETS, SERVICES, seasonCoverage, suggestions, teamCoverage } from './coverage.js';
+import { SERVICES, seasonCoverage, suggestions, teamCoverage, viewerMarket } from './coverage.js';
 import { feedPath, feedSelection, plainFeedPath } from './feeds.js';
 import { teamDescription, teamJsonLd, teamTitle, teamUrl } from './seo.js';
 import {
@@ -218,7 +218,8 @@ function mountCalendar(team) {
 
     const notes = [];
     if (personal) notes.push('Each subscription combination has its own feed: if yours change, subscribe to the new link.');
-    if (personal && prefs.market !== 'auto') {
+    // Only when the page's region differs from the home region the feed assumes.
+    if (personal && viewerMarket(prefs.market, team.abbrev) !== viewerMarket('auto', team.abbrev)) {
       notes.push('Feeds always assume you watch from the team’s home market; “Where you watch” only applies on this page.');
     }
     $('.calendar-note').textContent = notes.join(' ');
@@ -264,8 +265,10 @@ function marketSentence(cov, data) {
   if (cov.market === null) {
     return 'Assuming you watch from outside every Canadian team’s regional market, so regional broadcasts are blacked out.';
   }
-  const label = MARKETS.find((m) => m.id === cov.market)?.label ?? data.teamsByAbbrev.get(cov.market)?.name;
-  return `Assuming you watch from the ${esc(label)}. Change “Where you watch” above if that’s not you.`;
+  const teams = new Intl.ListFormat('en', { type: 'conjunction' }).format(
+    cov.market.teams.map((t) => data.teamsByAbbrev.get(t)?.common ?? t),
+  );
+  return `Assuming you watch from ${esc(cov.market.name)}, where ${esc(teams)} regional games air. Change “Where you watch” above if that’s not you.`;
 }
 
 function renderCoverage(team, data, prefs, cov) {

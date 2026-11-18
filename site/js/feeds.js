@@ -5,11 +5,12 @@
 //
 // To keep the number of files small and the URLs stable for a whole season,
 // combinations only include services that can matter for the team:
-//   • regional-only services (TSN, RDS) only for the teams they carry,
+//   • regional-only services (TSN, RDS) only when they carry a team whose
+//     regional games air in this team's home region,
 //   • one Sportsnet tier at most (each tier includes the channels of the one before).
 // Feeds assume the viewer watches from the team's home market.
 
-import { SERVICES } from './coverage.js';
+import { SERVICES, viewerMarket } from './coverage.js';
 
 const CODES = {
   free: 'free',
@@ -29,7 +30,8 @@ export const FEED_MODES = ['mark', 'only'];
 
 /** Services a team's feed can be personalised for. */
 export function feedServices(abbrev) {
-  return SERVICES.filter((s) => !s.regionalTeams || s.regionalTeams.includes(abbrev)).map((s) => s.id);
+  const local = viewerMarket('auto', abbrev)?.teams ?? [];
+  return SERVICES.filter((s) => !s.regionalTeams || s.regionalTeams.some((t) => local.includes(t))).map((s) => s.id);
 }
 
 /** The viewer's services reduced to what makes a difference for this team's feed. */

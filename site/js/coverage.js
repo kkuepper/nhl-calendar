@@ -110,26 +110,98 @@ export const networkName = (code) => NETWORK_NAMES[code] ?? code;
 /** Services selected for first-time visitors. */
 export const DEFAULT_SERVICES = SERVICES.filter((s) => s.defaultOn).map((s) => s.id);
 
-export const CANADIAN_TEAMS = ['CGY', 'EDM', 'MTL', 'OTT', 'TOR', 'VAN', 'WPG'];
-
-export const MARKETS = [
-  { id: 'auto', label: "Each team's home market" },
-  { id: 'CGY', label: 'Calgary Flames region' },
-  { id: 'EDM', label: 'Edmonton Oilers region' },
-  { id: 'MTL', label: 'Montréal Canadiens region' },
-  { id: 'OTT', label: 'Ottawa Senators region' },
-  { id: 'TOR', label: 'Toronto Maple Leafs region' },
-  { id: 'VAN', label: 'Vancouver Canucks region' },
-  { id: 'WPG', label: 'Winnipeg Jets region' },
+// The NHL's regional broadcast territories in Canada: areas of the country and
+// the teams whose regional games air there. Territories are shared, so a viewer
+// can get more than one team's regional feed: the Flames and Oilers cover the
+// same area, as do the Canadiens and Senators, and Saskatchewan and
+// Northwestern Ontario each get a third team's games too.
+//   teams: whose regional games air in the region
+//   home:  whose own fans are assumed to watch from here ("each team's home market")
+//   label: short form for the picker, teams first so a phone-width select keeps them
+// Sources, checked against each other in Nov 2026:
+//   https://www.shawdirect.ca/english/support/article/8360/ (table by region)
+//   https://support.bell.ca/fibe_tv/channels/mts_fibe_tv_nhl_blackouts (Nunavut;
+//   Manitoba has been Jets-only since they returned in 2011–12)
+export const REGIONS = [
+  {
+    id: 'bc',
+    name: 'British Columbia & Yukon',
+    label: 'Canucks · BC & Yukon',
+    teams: ['VAN'],
+    home: ['VAN'],
+  },
+  {
+    id: 'ab',
+    name: 'Alberta',
+    label: 'Flames, Oilers · Alberta',
+    teams: ['CGY', 'EDM'],
+    home: ['CGY', 'EDM'],
+  },
+  {
+    id: 'sk',
+    name: 'Saskatchewan, Northwest Territories & Nunavut',
+    label: 'Flames, Oilers, Jets · Sask. & the North',
+    teams: ['CGY', 'EDM', 'WPG'],
+    home: [],
+  },
+  {
+    id: 'mb',
+    name: 'Manitoba',
+    label: 'Jets · Manitoba',
+    teams: ['WPG'],
+    home: ['WPG'],
+  },
+  {
+    id: 'nwo',
+    name: 'Thunder Bay & Northwestern Ontario',
+    label: 'Jets, Maple Leafs · NW Ontario',
+    teams: ['WPG', 'TOR'],
+    home: [],
+  },
+  {
+    id: 'on',
+    name: 'Toronto, Southwestern & Northern Ontario',
+    label: 'Maple Leafs · Toronto & most of Ontario',
+    teams: ['TOR'],
+    home: ['TOR'],
+  },
+  {
+    id: 'east',
+    name: 'Eastern Ontario, Québec & Atlantic Canada',
+    label: 'Canadiens, Senators · Ottawa, Québec & Atlantic',
+    teams: ['MTL', 'OTT'],
+    home: ['MTL', 'OTT'],
+  },
 ];
 
+// Team → its home region. Mistakes in REGIONS throw here, when the module loads,
+// so they fail the calendar build (and the deploy) instead of skewing numbers.
+const HOME_REGION = new Map();
+for (const region of REGIONS) {
+  for (const team of region.home) {
+    if (!region.teams.includes(team)) {
+      throw new Error(`REGIONS: ${team} is at home in '${region.id}' but its regional games don't air there`);
+    }
+    if (HOME_REGION.has(team)) {
+      throw new Error(`REGIONS: ${team} has two home regions, '${HOME_REGION.get(team).id}' and '${region.id}'`);
+    }
+    HOME_REGION.set(team, region);
+  }
+}
+
+/** Regions where `team`'s regional broadcasts air (empty for US teams). */
+export const regionsAiring = (team) => REGIONS.filter((r) => r.teams.includes(team));
+
+export const MARKETS = [{ id: 'auto', label: "Each team's home market" }, ...REGIONS.map(({ id, label }) => ({ id, label }))];
+
 /**
- * The regional market the viewer is in, as a Canadian team abbreviation, or
- * null when they are in none of the regions involved (e.g. "auto" on a US team).
+ * The region the viewer watches from (an entry of REGIONS), or null when they
+ * are outside every team's territory (e.g. "auto" on a US team's page).
+ * An unknown region id falls back to the team's home market, like "auto".
  */
 export function viewerMarket(marketPref, teamAbbrev) {
-  if (marketPref && marketPref !== 'auto') return marketPref;
-  return CANADIAN_TEAMS.includes(teamAbbrev) ? teamAbbrev : null;
+  const chosen = marketPref && marketPref !== 'auto' ? REGIONS.find((r) => r.id === marketPref) : undefined;
+  return chosen ?? HOME_REGION.get(teamAbbrev) ?? null;
 }
 
 function broadcastRegion(broadcast, game) {
@@ -139,15 +211,22 @@ function broadcastRegion(broadcast, game) {
 }
 
 /**
- * How a viewer in `market` with the subscriptions `serviceIds` can watch `game`.
- * Returns each Canadian broadcast annotated with whether it is blacked out for
- * the viewer and whether one of their subscriptions carries it.
+ * How a viewer in `market` (a REGIONS entry or null) with the subscriptions
+ * `serviceIds` can watch `game`. Returns each Canadian broadcast annotated with
+ * whether it is blacked out for the viewer and whether one of their
+ * subscriptions carries it.
  */
 export function gameCoverage(game, market, serviceIds) {
+  // Before regions were shared, `market` was a team code; fail loudly rather than
+  // silently blacking out every regional broadcast.
+  if (market !== null && !REGIONS.includes(market)) {
+    throw new TypeError(`gameCoverage: market must be an entry of REGIONS or null, got ${JSON.stringify(market)}`);
+  }
   const selected = SERVICES.filter((s) => serviceIds.includes(s.id));
+  const local = market?.teams ?? [];
   const broadcasts = game.tv.map((b) => {
     const region = broadcastRegion(b, game);
-    const blackedOut = region !== null && region !== market;
+    const blackedOut = region !== null && !local.includes(region);
     const via = selected.filter((s) => s.networks.includes(b.network));
     return {
       ...b,
@@ -160,7 +239,8 @@ export function gameCoverage(game, market, serviceIds) {
 
   const viaBroadcast = broadcasts.some((b) => b.mine);
   const premium = selected.find((s) => s.outOfMarket);
-  const inMarket = market !== null && (market === game.home || market === game.away);
+  // Out-of-market packages black out every team whose regional games air where you watch.
+  const inMarket = local.includes(game.home) || local.includes(game.away);
   const exclusive = game.tv.some((b) => EXCLUSIVE_NETWORKS.has(b.network));
   const outOfMarket = !viaBroadcast && Boolean(premium) && !inMarket && !exclusive;
 

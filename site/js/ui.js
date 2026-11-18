@@ -49,6 +49,19 @@ export async function loadHistory() {
 
 const PREFS_KEY = 'nhl-calendar:prefs:v1';
 
+// Until Nov 2026 "where you watch" was a team; these are the regions those saved
+// values now mean. Kept separate from REGIONS so later region changes don't
+// change how old prefs are read.
+const LEGACY_MARKETS = new Map([
+  ['VAN', 'bc'],
+  ['CGY', 'ab'],
+  ['EDM', 'ab'],
+  ['WPG', 'mb'],
+  ['TOR', 'on'],
+  ['MTL', 'east'],
+  ['OTT', 'east'],
+]);
+
 export function loadPrefs() {
   try {
     const raw = JSON.parse(localStorage.getItem(PREFS_KEY));
@@ -60,9 +73,10 @@ export function loadPrefs() {
       const seen = new Set(Array.isArray(raw.seen) ? raw.seen : []);
       const services = raw.services.filter((id) => known.has(id));
       const added = DEFAULT_SERVICES.filter((id) => !seen.has(id) && !services.includes(id));
+      const market = LEGACY_MARKETS.get(raw.market) ?? raw.market;
       return {
         services: [...added, ...services],
-        market: markets.has(raw.market) ? raw.market : 'auto',
+        market: markets.has(market) ? market : 'auto',
       };
     }
   } catch {
