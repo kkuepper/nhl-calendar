@@ -18,10 +18,16 @@ The NHL API lists each broadcast with a network code and a market:
 A game counts as watchable when:
 
 1. one of its **national** broadcasts is on a network one of your subscriptions carries, or
-2. one of its **regional** broadcasts belongs to the team whose region you watch from, and your subscription carries that network (regional feeds are blacked out elsewhere), or
-3. you have **Sportsnet+ Premium**, the game is out of your market (your team isn't playing), and it isn't a national exclusive (Prime Video Wednesdays).
+2. one of its **regional** broadcasts belongs to a team whose regional games air where you watch, and your subscription carries that network (regional feeds are blacked out elsewhere), or
+3. you have **Sportsnet+ Premium**, the game is out of your market (no team whose regional games air where you watch is playing), and it isn't a national exclusive (Prime Video Wednesdays).
 
-"Where you watch" defaults to *each team's home market*. On a Canadian team's page that means that team's region. US teams have no Canadian region, so only national broadcasts and out-of-market games count for them. Pick a specific region (e.g. *Toronto Maple Leafs region*) to see every team from one place.
+### Regions
+
+"Where you watch" is one of the NHL's regional broadcast areas. Teams share territories, so some areas get more than one team's regional games: the Flames and Oilers cover the same area (Alberta, plus Saskatchewan and the North), as do the Canadiens and Senators (Eastern Ontario, Québec and Atlantic Canada). A viewer there sees both teams' regional games with the same subscriptions. Saskatchewan and the North also get the Jets, and Northwestern Ontario gets both the Jets and the Maple Leafs.
+
+The full list of regions and their teams is `REGIONS` in [`site/js/coverage.js`](site/js/coverage.js), taken from [Shaw Direct's NHL blackout table](https://www.shawdirect.ca/english/support/article/8360/) and checked against [Bell MTS's blackout page](https://support.bell.ca/fibe_tv/channels/mts_fibe_tv_nhl_blackouts).
+
+"Where you watch" defaults to *each team's home market*: on a Canadian team's page, the region its own fans are in (Alberta for the Flames and Oilers, Manitoba for the Jets, and so on). US teams have no Canadian region, so only national broadcasts and out-of-market games count for them. Pick a specific region to see every team from one place.
 
 ### Subscription → network mapping
 
@@ -44,8 +50,8 @@ Unknown codes are shown as-is and not counted. The fetch script prints every cod
 
 **Known simplifications**
 
-- Regional territories overlap in reality (for example Saskatchewan or Atlantic Canada); the site models one region at a time.
-- Past seasons use **today's** packages. For example, Sportsnet+ Premium's out-of-market games are applied to seasons where that feature was sold under another name.
+- Regions follow TV providers' tables, not the NHL's exact boundaries, which can split a province (for example around Belleville in Ontario).
+- Past seasons use **today's** packages and regions. For example, Sportsnet+ Premium's out-of-market games are applied to seasons where that feature was sold under another name, and any change to a team's territory isn't reflected in older seasons.
 - Package details (e.g. which Sportsnet+ tier has which streaming exclusives) change between seasons, so check the mapping each fall.
 
 ## Data
@@ -78,17 +84,17 @@ The API sends no CORS headers, so the browser can't call it directly. That's why
 
 **Why one file per combination?** GitHub Pages only serves static files, so a feed can't be built on request from URL parameters. [`site/js/feeds.js`](site/js/feeds.js), shared by the build and the page, keeps the number of combinations small:
 
-- TSN and RDS only count for the teams they carry regionally (TSN: Canadiens, Senators, Maple Leafs, Jets; RDS: Canadiens, Senators).
+- TSN and RDS only count when they carry a team whose regional games air in the feed team's home region (TSN: Canadiens, Senators, Maple Leafs, Jets; RDS: Canadiens, Senators).
 - Only one Sportsnet tier counts, since each tier includes the channels of the one before.
 
-That gives 32–128 combinations per team, 2,592 files (about 74 MB) in total. These rules don't depend on the schedule, so a subscribed URL keeps working all season.
+That gives 32–128 combinations per team, 2,592 files (about 78 MB) in total. These rules don't depend on the schedule, so a subscribed URL keeps working all season.
 
 Every feed assumes you watch from the team's home market. The site's "Where you watch" setting would multiply the file count by eight, so it only applies on the page. A small server (e.g. a Cloudflare Worker reusing `coverage.js`) could build exact feeds on request, if that's ever needed.
 
 **Event contents:**
 
 - **Title:** the matchup and the channel, e.g. `Canadiens @ Maple Leafs · Sportsnet`. Personalised feeds name the channel *you'd* watch it on. Games you can't watch keep all their channels, so you can see what you're missing: `🚫 Islanders @ Maple Leafs · Prime Video`. Games with no Canadian broadcast say `no Canadian TV`.
-- **Description:** ✅/🚫 for your subscriptions, then every Canadian channel, marked *national* or *{team} region only*.
+- **Description:** ✅/🚫 for your subscriptions, then every Canadian channel, marked *national* or with the team and regions of a regional feed, e.g. *Canadiens regional · Eastern Ontario, Québec & Atlantic Canada*.
 - **Times and behaviour:** times are UTC, so every app shows them in your own time zone. Events last 3 hours, are marked as free time (they don't block your availability), and keep a stable `UID`, so changes update existing events instead of duplicating them.
 
 Subscribing:

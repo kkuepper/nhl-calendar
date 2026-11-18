@@ -12,7 +12,7 @@
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { SERVICES, gameCoverage, viewerMarket } from '../site/js/coverage.js';
+import { SERVICES, gameCoverage, regionsAiring, viewerMarket } from '../site/js/coverage.js';
 import { allFeedSelections, feedPath, plainFeedPath } from '../site/js/feeds.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -71,11 +71,17 @@ const serviceNames = (ids) => ids.map((id) => SERVICES.find((s) => s.id === id)?
  */
 function eventLines(game, team, teamsByAbbrev, stamp, selection, mode) {
   const common = (abbrev) => teamsByAbbrev.get(abbrev)?.common ?? abbrev;
+  // e.g. "Canadiens regional · Eastern Ontario, Québec & Atlantic Canada"
+  const regionalNote = (abbrev) => {
+    const where = regionsAiring(abbrev).map((r) => r.name);
+    return where.length ? `${common(abbrev)} regional · ${where.join('; ')}` : `${common(abbrev)} regional`;
+  };
   const teamPage = `${SITE_URL}team.html?team=${team.abbrev}`;
   const cov = gameCoverage(game, viewerMarket('auto', team.abbrev), selection ?? []);
   if (selection && mode === 'only' && !cov.watchable) return null;
 
-  // Channels in the team's own market: national ones plus its regional feed.
+  // Channels in the team's home region: national ones plus the regional feed of
+  // every team whose games air there (e.g. both the Senators' and Canadiens').
   const local = unique(cov.broadcasts.filter((b) => !b.blackedOut).map((b) => b.name));
   const allChannels = local.length
     ? local.join(', ')
@@ -104,7 +110,7 @@ function eventLines(game, team, teamsByAbbrev, stamp, selection, mode) {
   description.push('Canadian TV:');
   if (!cov.broadcasts.length) description.push('• none listed yet');
   for (const b of cov.broadcasts) {
-    description.push(`• ${b.name} (${b.region ? `${common(b.region)} region only` : 'national'})`);
+    description.push(`• ${b.name} (${b.region ? regionalNote(b.region) : 'national'})`);
   }
 
   const lines = ['BEGIN:VEVENT', `UID:nhl-${game.id}@${UID_DOMAIN}`, `DTSTAMP:${stamp}`];
