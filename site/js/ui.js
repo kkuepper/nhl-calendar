@@ -92,6 +92,7 @@ function savePrefs(prefs) {
   } catch {
     // Private mode etc. — the picker still works for this page view.
   }
+  refreshFeedbackHref();
 }
 
 // ---------------------------------------------------------------- picker
@@ -287,35 +288,78 @@ function feedbackTeam() {
   return /^[A-Za-z]{2,3}$/.test(abbrev) ? abbrev.toUpperCase() : '';
 }
 
+/** Saved preferences, or null when this browser has never stored them. */
+function savedPrefs() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(PREFS_KEY));
+    if (raw && Array.isArray(raw.services)) return loadPrefs();
+  } catch {
+    // Storage blocked or corrupt: leave region and services off the link.
+  }
+  return null;
+}
+
 /**
- * Issue forms accept a field id as a query parameter. Team, region, and
- * services are optional inputs, so those ids are filled from this page.
+ * Issue forms accept a field id as a query parameter. Team is always filled.
+ * Region and services are filled only after the visitor has saved a choice.
+ * `title` is the issue title, not a form field.
  */
 function feedbackHref() {
   const url = new URL(FEEDBACK_FORM);
-  const prefs = loadPrefs();
   const team = feedbackTeam();
-  const region = MARKETS.find((market) => market.id === prefs.market)?.label ?? '';
-  const services = prefs.services
-    .map((id) => SERVICES.find((service) => service.id === id)?.name)
-    .filter(Boolean)
-    .join(', ');
-  if (team) url.searchParams.set('team', team);
-  if (region) url.searchParams.set('region', region);
-  if (services) url.searchParams.set('services', services);
+  if (team) {
+    url.searchParams.set('team', team);
+    url.searchParams.set('title', `Feedback: ${team}`);
+  }
+  const prefs = savedPrefs();
+  if (prefs) {
+    const region = MARKETS.find((market) => market.id === prefs.market)?.label ?? '';
+    const services = prefs.services
+      .map((id) => SERVICES.find((service) => service.id === id)?.name)
+      .filter(Boolean)
+      .join(', ');
+    if (region) url.searchParams.set('region', region);
+    if (services) url.searchParams.set('services', services);
+  }
   return url.href;
 }
 
-/** Prefill the footer link, then count the click without blocking it. */
+function refreshFeedbackHref() {
+  const link = document.getElementById('feedback');
+  if (link) link.href = feedbackHref();
+}
+
+/** Queue the click the same way a subscribe does, so it counts before a.js loads. */
+function trackFeedbackClick() {
+  try {
+    if (typeof window.palmetaAnalytics !== 'function') {
+      window.palmetaAnalytics = function (command, value) {
+        ;(window.palmetaAnalytics.q = window.palmetaAnalytics.q || []).push([command, value]);
+      };
+      window.palmetaAnalytics.q = window.palmetaAnalytics.q || [];
+    }
+    window.palmetaAnalytics('event', { name: 'feedback_click', count: 1 });
+  } catch {
+    // The feedback link still opens.
+  }
+}
+
+/** Keep the href current for middle-click and Copy link, and count the click. */
 export function mountFeedbackLink() {
   const link = document.getElementById('feedback');
   if (!link) return;
-  link.addEventListener('click', () => {
-    link.href = feedbackHref();
-    try {
-      window.palmetaAnalytics('event', { name: 'feedback_click', count: 1 });
-    } catch {
-      // The feedback link still opens.
-    }
+  refreshFeedbackHref();
+  link.addEventListener('pointerenter', refreshFeedbackHref);
+  link.addEventListener('focus', refreshFeedbackHref);
+  // Primary click only. A middle-click is auxclick, not a second click.
+  link.addEventListener('click', (event) => {
+    if (event.button !== 0) return;
+    refreshFeedbackHref();
+    trackFeedbackClick();
+  });
+  link.addEventListener('auxclick', (event) => {
+    if (event.button !== 1) return;
+    refreshFeedbackHref();
+    trackFeedbackClick();
   });
 }
