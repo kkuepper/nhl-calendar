@@ -232,24 +232,36 @@ function mountCalendar(team) {
       update();
     });
   }
+  const feedKind = () => (prefs.services.length === 0 ? 'plain' : mode === 'only' ? 'personal_only' : 'personal');
+  const countLink = (method) => {
+    if (method !== 'google' && method !== 'webcal' && method !== 'download') return;
+    trackCalendarSubscribe(team.abbrev, method, feedKind());
+  };
   for (const link of el.querySelectorAll('[data-link]')) {
-    link.addEventListener('click', () => {
-      const method = link.getAttribute('data-link');
-      if (method !== 'google' && method !== 'webcal' && method !== 'download') return;
-      const personal = prefs.services.length > 0;
-      const feed = !personal ? 'plain' : mode === 'only' ? 'personal_only' : 'personal';
-      trackCalendarSubscribe(team.abbrev, method, feed);
+    const method = link.getAttribute('data-link');
+    // Primary click only. A middle-click is auxclick, not a second click.
+    link.addEventListener('click', (event) => {
+      if (event.button !== 0) return;
+      countLink(method);
+    });
+    link.addEventListener('auxclick', (event) => {
+      if (event.button !== 1) return;
+      countLink(method);
     });
   }
   input.addEventListener('focus', () => input.select());
   copy.addEventListener('click', async () => {
+    const feed = feedKind();
+    let copied = false;
     try {
       await navigator.clipboard.writeText(input.value);
       copy.textContent = 'Copied';
+      copied = true;
     } catch {
       input.focus();
       copy.textContent = 'Press ⌘C / Ctrl+C';
     }
+    if (copied) trackCalendarSubscribe(team.abbrev, 'copy', feed);
     setTimeout(() => (copy.textContent = 'Copy'), 2000);
   });
 
@@ -257,10 +269,11 @@ function mountCalendar(team) {
 }
 
 /**
- * One click on a subscribe button. Palmeta stores a name and a count, so the
- * team, button, and feed are the name: cal_tor_google_plain. personal_only is
- * the "leave them out" feed (a hyphen is not a legal event name).
- * A missing script, or a throw, does not stop the link.
+ * One subscribe or copy. Palmeta stores a name and a count, so the team,
+ * button, and feed are the name: cal_tor_google_plain, cal_tor_copy_personal_only.
+ * The longest copy name, a 3-letter team plus personal_only, is 26 characters
+ * (the limit is 32). personal_only is the "leave them out" feed.
+ * A missing script, or a throw, does not stop the link or the copy.
  */
 function trackCalendarSubscribe(abbrev, method, feed) {
   const name = `cal_${String(abbrev).toLowerCase()}_${method}_${feed}`;

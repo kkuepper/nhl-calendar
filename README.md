@@ -105,7 +105,7 @@ Subscribing:
 | Apple Calendar, Outlook desktop | The `webcal://` link opens the app's subscribe dialog. |
 | Anything else | Copy the feed URL from the team page and add it as a calendar URL. |
 
-The Google, Apple/Outlook, and download buttons each send one Palmeta count. The script stores a name, not extra fields, so the name is `cal_<team>_<method>_<feed>`: the team abbreviation, `google`, `webcal`, or `download`, and `plain`, `personal`, or `personal_only` (the feed that leaves out games you can't watch). The link still opens if analytics has not loaded.
+The Google, Apple/Outlook, and download buttons each send one Palmeta count, including a middle-click that opens the link in a new tab. A normal click is not counted twice. Copy sends one only after the feed URL is on the clipboard. The script stores a name, not extra fields, so the name is `cal_<team>_<method>_<feed>`: the team abbreviation, `google`, `webcal`, `download`, or `copy`, and `plain`, `personal`, or `personal_only` (the feed that leaves out games you can't watch). The longest copy name, such as `cal_tor_copy_personal_only`, is 26 characters. The link still opens, and copy still works, if analytics has not loaded.
 
 ## Run locally
 
