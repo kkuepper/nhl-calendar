@@ -7,6 +7,7 @@ import {
   loadHistory,
   loadPrefs,
   logoHtml,
+  mountFeedbackLink,
   mountPicker,
   percent,
   pieWithLabel,
@@ -75,6 +76,7 @@ function applyTeamMeta(team, data) {
 }
 
 async function main() {
+  mountFeedbackLink();
   const gamesEl = document.getElementById('games');
   const abbrev = teamAbbrev();
 

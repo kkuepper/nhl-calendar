@@ -274,3 +274,48 @@ export function updatedLabel(iso) {
 export function showError(container, message) {
   container.innerHTML = `<div class="error" role="alert"><strong>Something went wrong.</strong> ${esc(message)}</div>`;
 }
+
+const FEEDBACK_FORM = 'https://github.com/kkuepper/nhl-calendar/issues/new?template=feedback.yml';
+
+/** Team abbreviation from /team/TOR/ or the legacy ?team=TOR query. */
+function feedbackTeam() {
+  const query = new URLSearchParams(location.search).get('team');
+  if (query && /^[A-Za-z]{2,3}$/.test(query)) return query.toUpperCase();
+  const parts = location.pathname.split('/').filter(Boolean);
+  const index = parts.lastIndexOf('team');
+  const abbrev = index >= 0 ? parts[index + 1] : '';
+  return /^[A-Za-z]{2,3}$/.test(abbrev) ? abbrev.toUpperCase() : '';
+}
+
+/**
+ * Issue forms accept a field id as a query parameter. Team, region, and
+ * services are optional inputs, so those ids are filled from this page.
+ */
+function feedbackHref() {
+  const url = new URL(FEEDBACK_FORM);
+  const prefs = loadPrefs();
+  const team = feedbackTeam();
+  const region = MARKETS.find((market) => market.id === prefs.market)?.label ?? '';
+  const services = prefs.services
+    .map((id) => SERVICES.find((service) => service.id === id)?.name)
+    .filter(Boolean)
+    .join(', ');
+  if (team) url.searchParams.set('team', team);
+  if (region) url.searchParams.set('region', region);
+  if (services) url.searchParams.set('services', services);
+  return url.href;
+}
+
+/** Prefill the footer link, then count the click without blocking it. */
+export function mountFeedbackLink() {
+  const link = document.getElementById('feedback');
+  if (!link) return;
+  link.addEventListener('click', () => {
+    link.href = feedbackHref();
+    try {
+      window.palmetaAnalytics('event', { name: 'feedback_click', count: 1 });
+    } catch {
+      // The feedback link still opens.
+    }
+  });
+}

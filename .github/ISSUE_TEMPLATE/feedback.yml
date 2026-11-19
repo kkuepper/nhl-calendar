@@ -1,0 +1,27 @@
+name: Feedback
+description: A wrong count, a missing channel, or an idea.
+title: Feedback
+labels: ["feedback"]
+body:
+  - type: textarea
+    id: request
+    attributes:
+      label: What's wrong or what you'd like
+      description: A wrong game count, a channel that looks wrong, or a feature you want.
+    validations:
+      required: true
+  - type: input
+    id: team
+    attributes:
+      label: Team
+      description: Optional.
+  - type: input
+    id: region
+    attributes:
+      label: Broadcast region
+      description: Optional. Where you watch.
+  - type: input
+    id: services
+    attributes:
+      label: Streaming services
+      description: Optional.

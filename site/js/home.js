@@ -4,6 +4,7 @@ import {
   loadData,
   loadPrefs,
   logoHtml,
+  mountFeedbackLink,
   mountPicker,
   percent,
   pieWithLabel,
@@ -25,6 +26,7 @@ const MARKET_HINT =
   'US teams have no Canadian regional market, so only national broadcasts and Sportsnet+ Premium’s out-of-market games count for them.';
 
 async function main() {
+  mountFeedbackLink();
   const container = document.getElementById('teams');
   let data;
   try {
