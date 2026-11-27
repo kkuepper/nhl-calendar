@@ -1,6 +1,6 @@
 import { SERVICES, seasonCoverage, suggestions, teamCoverage, viewerMarket } from './coverage.js';
 import { feedPath, feedSelection, plainFeedPath } from './feeds.js';
-import { teamDescription, teamJsonLd, teamTitle, teamUrl } from './seo.js';
+import { calendarCardHtml, teamDescription, teamJsonLd, teamTitle, teamUrl } from './seo.js';
 import {
   esc,
   loadData,
@@ -46,10 +46,15 @@ function setMeta(name, content, attr = 'name') {
   el.setAttribute('content', content);
 }
 
-/** Title, description, canonical, social tags, and SportsEvent JSON-LD. */
+/**
+ * Title, description, canonical, social tags, and SportsEvent JSON-LD. Uses the
+ * same wording as the prerendered page, recomputed for the current time, so a
+ * page built this morning still names the right game tonight. The FAQ JSON-LD
+ * (#seo-faq) is left as built.
+ */
 function applyTeamMeta(team, data) {
-  const title = teamTitle(team);
-  const description = teamDescription(team);
+  const title = teamTitle(team, data);
+  const description = teamDescription(team, data);
   const url = teamUrl(team.abbrev);
   document.title = title;
   setMeta('description', description);
@@ -72,7 +77,7 @@ function applyTeamMeta(team, data) {
     ld.type = 'application/ld+json';
     document.head.appendChild(ld);
   }
-  ld.textContent = JSON.stringify(teamJsonLd(team, data.games, data.teamsByAbbrev));
+  ld.textContent = JSON.stringify(teamJsonLd(team, data));
 }
 
 async function main() {
@@ -160,33 +165,17 @@ function renderHistory(team, history, prefs) {
  * The "Add to your calendar" card. Feeds are static files built by
  * scripts/build-calendars.mjs, one per subscription combination (see feeds.js);
  * `update(prefs)` points every link at the feed for the current selection.
+ *
+ * Team pages ship this card prerendered (calendarCardHtml in seo.js) with links
+ * to the plain feed, so crawlers and no-JS visitors see it. That markup is kept;
+ * only hrefs and the short status lines change. It is rendered here only when
+ * the page has none (the legacy team.html).
  */
 function mountCalendar(team) {
   const el = document.getElementById('calendar');
-  el.innerHTML = `
-    <div class="calendar-head">
-      <h2 class="calendar-title" id="calendar-title">Add the schedule to your calendar</h2>
-      <p class="muted small">Every ${esc(team.common)} game this season with its Canadian channel in the title. Subscribe once and your calendar picks up schedule and broadcaster changes by itself. Google checks every few hours, sometimes only once a day.</p>
-    </div>
-    <p class="calendar-for"></p>
-    <fieldset class="calendar-modes">
-      <legend class="sr-only">Games you can’t watch</legend>
-      <label><input type="radio" name="calendar-mode" value="mark" checked> Show them, marked 🚫</label>
-      <label><input type="radio" name="calendar-mode" value="only"> Leave them out</label>
-    </fieldset>
-    <div class="calendar-actions">
-      <a class="btn btn-primary" data-link="google" target="_blank" rel="noopener">Google Calendar</a>
-      <a class="btn" data-link="webcal">Apple Calendar / Outlook</a>
-      <a class="btn" data-link="download">Download .ics</a>
-    </div>
-    <div class="calendar-url">
-      <label class="calendar-url-label" for="calendar-url">Feed URL for any other calendar app</label>
-      <div class="calendar-url-row">
-        <input id="calendar-url" type="text" readonly>
-        <button type="button" class="btn calendar-copy">Copy</button>
-      </div>
-    </div>
-    <p class="calendar-note muted small"></p>`;
+  if (!el.querySelector('[data-link]')) {
+    el.innerHTML = calendarCardHtml(team, { howTo: new URL('how-to/', siteRoot).href, root: siteRoot });
+  }
   el.hidden = false;
 
   const $ = (sel) => el.querySelector(sel);
@@ -295,6 +284,8 @@ function trackCalendarSubscribe(abbrev, method, feed) {
 
 function renderHero(team, data) {
   const hero = document.getElementById('hero');
+  // Prerendered team pages already have their hero.
+  if (hero.querySelector('.hero-title')) return;
   hero.setAttribute('style', teamColorStyle(team.abbrev));
   const season = seasonLabel(data.season);
   hero.innerHTML = `
