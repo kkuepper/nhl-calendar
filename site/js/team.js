@@ -108,11 +108,12 @@ async function main() {
   renderHero(team, data);
   const calendar = mountCalendar(team);
 
-  const state = { prefs: loadPrefs(), expanded: false, history: [] };
+  // `expanded` = show all upcoming games; `historyOpen` = "Compare past seasons" toggle.
+  const state = { prefs: loadPrefs(), expanded: false, history: [], historyOpen: false };
   const render = () => {
     const cov = teamCoverage(data.games, team.abbrev, state.prefs);
     renderCoverage(team, data, state.prefs, cov);
-    renderHistory(team, state.history, state.prefs);
+    renderHistory(team, state);
     calendar.update(state.prefs);
     renderGames(gamesEl, team, data, state, cov, render);
   };
@@ -124,12 +125,20 @@ async function main() {
   render();
 
   state.history = await historyPromise;
-  renderHistory(team, state.history, state.prefs);
+  renderHistory(team, state);
 }
 
-function renderHistory(team, history, prefs) {
+/**
+ * Past-season donuts, as a collapsed "Compare past seasons" section at the
+ * bottom of the coverage card. renderCoverage rewrites #coverage (and its
+ * #history slot) on every change, so the open/closed state lives in
+ * `state.historyOpen` and is restored here.
+ */
+function renderHistory(team, state) {
   const el = document.getElementById('history');
-  const seasons = history
+  if (!el) return;
+  const { prefs } = state;
+  const seasons = state.history
     .map(({ season, games }) => ({ season, cov: seasonCoverage(games, team.abbrev, prefs) }))
     .filter(({ cov }) => cov.total > 0) // e.g. Utah before 2024–25
     .slice(0, MAX_PAST_SEASONS);
@@ -154,11 +163,16 @@ function renderHistory(team, history, prefs) {
   });
 
   el.innerHTML = `
-    <div class="history-head">
-      <h2 class="history-title" id="history-title">Past seasons</h2>
-      <p class="muted small">Same subscriptions and region, applied to each full regular season. Until 2025–26, CBC and Citytv carried Saturday games — those count under Free TV.</p>
-    </div>
-    <ol class="history-list">${items.join('')}</ol>`;
+    <details class="history-details"${state.historyOpen ? ' open' : ''}>
+      <summary class="history-toggle">Compare past seasons</summary>
+      <div class="history-body">
+        <p class="muted small history-note">Same subscriptions and region, applied to each full regular season. Until 2025–26, CBC and Citytv carried Saturday games — those count under Free TV.</p>
+        <ol class="history-list">${items.join('')}</ol>
+      </div>
+    </details>`;
+  el.querySelector('details').addEventListener('toggle', (e) => {
+    state.historyOpen = e.currentTarget.open;
+  });
 }
 
 /**
@@ -190,13 +204,23 @@ function mountCalendar(team) {
     const selection = feedSelection(prefs.services, team.abbrev);
     const path = personal ? feedPath(team.abbrev, selection, mode) : plainFeedPath(team.abbrev);
     const feed = new URL(path, siteRoot).href;
+    // Personalised feeds share the same path pattern; rebuild Outlook/Google links from the chosen file.
     const webcal = feed.replace(/^https?:/, 'webcal:');
+    const outlookQuery = `url=${encodeURIComponent(feed)}&name=${encodeURIComponent(`${team.name} on Canadian TV`)}`;
 
-    $('[data-link="google"]').href = `https://calendar.google.com/calendar/r?cid=${encodeURIComponent(webcal)}`;
-    $('[data-link="webcal"]').href = webcal;
+    const google = $('[data-link="google"]');
+    if (google) google.href = `https://calendar.google.com/calendar/r?cid=${encodeURIComponent(webcal)}`;
+    const apple = $('[data-link="webcal"]');
+    if (apple) apple.href = webcal;
+    const live = $('[data-link="live"]');
+    if (live) live.href = `https://outlook.live.com/calendar/0/addfromweb?${outlookQuery}`;
+    const work = $('[data-link="work"]');
+    if (work) work.href = `https://outlook.office.com/calendar/0/addfromweb?${outlookQuery}`;
     const download = $('[data-link="download"]');
-    download.href = feed;
-    download.download = personal ? `${team.abbrev}-${path.split('/').pop()}` : `${team.abbrev}.ics`;
+    if (download) {
+      download.href = feed;
+      download.download = personal ? `${team.abbrev}-${path.split('/').pop()}` : `${team.abbrev}.ics`;
+    }
     input.value = feed;
 
     const names = selection.map((id) => SERVICES.find((s) => s.id === id).name);
@@ -225,7 +249,7 @@ function mountCalendar(team) {
   }
   const feedKind = () => (prefs.services.length === 0 ? 'plain' : mode === 'only' ? 'personal_only' : 'personal');
   const countLink = (method) => {
-    if (method !== 'google' && method !== 'webcal' && method !== 'download') return;
+    if (method !== 'google' && method !== 'webcal' && method !== 'live' && method !== 'work' && method !== 'download') return;
     trackCalendarSubscribe(team.abbrev, method, feedKind());
   };
   for (const link of el.querySelectorAll('[data-link]')) {
@@ -262,8 +286,9 @@ function mountCalendar(team) {
 /**
  * One subscribe or copy. Palmeta stores a name and a count, so the team,
  * button, and feed are the name: cal_tor_google_plain, cal_tor_copy_personal_only.
- * The longest copy name, a 3-letter team plus personal_only, is 26 characters
- * (the limit is 32). personal_only is the "leave them out" feed.
+ * Outlook.com is `live`, Microsoft 365 is `work`. The longest names, a 3-letter
+ * team plus personal_only, stay at 26 characters (the limit is 32).
+ * personal_only is the "leave them out" feed.
  * A missing script, or a throw, does not stop the link or the copy.
  */
 function trackCalendarSubscribe(abbrev, method, feed) {
@@ -312,8 +337,13 @@ function renderCoverage(team, data, prefs, cov) {
   const el = document.getElementById('coverage');
   const has = prefs.services.length > 0;
 
+  // Slot for the "Compare past seasons" toggle (filled by renderHistory).
+  const historySlot = `<div id="history" class="history" hidden></div>`;
+
   if (!cov.total) {
-    el.innerHTML = `<p class="coverage-lead">No upcoming games for the ${esc(team.common)} right now.</p>`;
+    el.innerHTML = `
+      <p class="coverage-lead coverage-empty">No upcoming games for the ${esc(team.common)} right now.</p>
+      ${historySlot}`;
     return;
   }
 
@@ -349,7 +379,8 @@ function renderCoverage(team, data, prefs, cov) {
       <p class="coverage-lead">${lead}</p>
       <p class="coverage-market">${marketSentence(cov, data)}</p>
       ${tipsHtml}
-    </div>`;
+    </div>
+    ${historySlot}`;
 }
 
 function renderGames(el, team, data, state, cov, rerender) {
@@ -424,6 +455,10 @@ function gameRow({ game, coverage }, team, data, { has, start, today, tomorrow, 
       title = b.blackedOut
         ? `${regionName} regional broadcast — blacked out where you watch`
         : `${regionName} regional broadcast`;
+    }
+    // Prime Video carries English and French in Canada; RDS/TVA are French.
+    if (b.network === 'Prime' || /^(RDS|TVAS)/.test(b.network)) {
+      tag = tag ? `${tag} · FR` : 'FR';
     }
     if (b.blackedOut) cls += ' tv-blackout';
     else if (b.mine) cls += ' tv-mine';

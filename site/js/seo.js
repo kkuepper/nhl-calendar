@@ -97,7 +97,13 @@ export function gameChannels(game) {
     .sort((a, b) => a.french - b.french || order[a.kind] - order[b.kind]);
 }
 
-export const channelPhrase = (c) => `${c.name} (${c.kind}${c.french ? ', French' : ''})`;
+export const channelPhrase = (c) => {
+  const lang = c.code === 'Prime' ? ', English and French' : c.french ? ', French' : '';
+  return `${c.name} (${c.kind}${lang})`;
+};
+
+/** FR tag for French-language channels, and for Prime Video (English and French in Canada). */
+const frenchTag = (c) => (c.french || c.code === 'Prime' ? ' · FR' : '');
 
 export function channelLabel(broadcast) {
   const name = networkName(broadcast.network);
@@ -111,7 +117,7 @@ export function channelChipsHtml(game) {
   return channels
     .map(
       (c) =>
-        `<li class="tv"><span class="tv-name">${esc(c.name)}</span><span class="tv-tag">${esc(c.kind)}${c.french ? ' · FR' : ''}</span></li>`,
+        `<li class="tv"><span class="tv-name">${esc(c.name)}</span><span class="tv-tag">${esc(c.kind)}${frenchTag(c)}</span></li>`,
     )
     .join('');
 }
@@ -201,18 +207,43 @@ export function viewingNote(team, game) {
   return parts.join(' ');
 }
 
+const TITLE_LIMIT = 65;
+
+function firstTitleWithin(candidates, limit = TITLE_LIMIT) {
+  return candidates.find((title) => title.length <= limit) ?? candidates.at(-1);
+}
+
 export function teamTitle(team, data, now = Date.now()) {
-  const fallback = `${team.name} TV schedule · what channel every game is on in Canada`;
+  const fallback = `${team.name} TV schedule on Canadian TV`;
   const spot = data ? spotlightGame(data.games, team.abbrev, now) : null;
   if (!spot) return data ? fallback : `${team.name} schedule on Canadian TV`;
   const names = gameChannels(spot.game).map((c) => c.name);
-  const tv = names.length ? names.join(', ') : 'Not on Canadian TV';
+  const tv = names.length ? names.join(', ') : 'No Canadian TV listed yet';
   const opp = opponentPhrase(spot.game, team.abbrev, data.teamsByAbbrev, { short: true });
+  const time = easternTime(spot.game);
+  const date = easternShortDate(spot.game.start);
+  // When more than two channels, drop the opponent or the time/date so the title stays short.
+  const many = names.length > 2;
+  const shortToday = names.length
+    ? `${team.common} game today: ${tv}`
+    : `${team.common} game today: ${tv}`;
+  const shortNext = `Next ${team.common} game: ${tv}`;
   if (spot.today) {
-    const q = names.length ? `What channel is the ${team.common} game on today?` : `Is the ${team.common} game on TV today?`;
-    return `${q} ${tv} · ${opp}, ${easternTime(spot.game)}`;
+    const q = names.length
+      ? `What channel is the ${team.common} game on today?`
+      : `Is the ${team.common} game on TV today?`;
+    const both = `${q} ${tv} · ${opp}, ${time}`;
+    const withTime = `${q} ${tv} · ${time}`;
+    const withOpp = `${q} ${tv} · ${opp}`;
+    const base = `${q} ${tv}`;
+    return firstTitleWithin(many ? [withTime, withOpp, base, shortToday] : [both, withTime, withOpp, base, shortToday]);
   }
-  return `What channel is the next ${team.common} game on? ${tv} · ${easternShortDate(spot.game.start)} ${opp}`;
+  const q = `What channel is the next ${team.common} game on?`;
+  const both = `${q} ${tv} · ${date} ${opp}`;
+  const withDate = `${q} ${tv} · ${date}`;
+  const withOpp = `${q} ${tv} · ${opp}`;
+  const base = `${q} ${tv}`;
+  return firstTitleWithin(many ? [withDate, withOpp, base, shortNext] : [both, withDate, withOpp, base, shortNext]);
 }
 
 function teamChannelSummary(team, data) {
@@ -223,15 +254,32 @@ function teamChannelSummary(team, data) {
   return top.length ? andList(top) : 'Sportsnet, TSN, RDS, TVA Sports, and Prime Video';
 }
 
+const META_LIMIT = 155;
+
+function clipMeta(text, limit = META_LIMIT) {
+  if (text.length <= limit) return text;
+  const cut = text.slice(0, limit - 1);
+  const atWord = cut.replace(/\s+\S*$/, '');
+  const trimmed = (atWord.length >= 80 ? atWord : cut).replace(/[ .,;:–-]+$/, '');
+  return `${trimmed}…`;
+}
+
 export function teamDescription(team, data, now = Date.now()) {
   if (!data) {
     return `Upcoming ${team.name} games and which Canadian channels carry them: Sportsnet, TSN, RDS, TVA Sports, and Prime Video.`;
   }
   const season = seasonLabel(data.season);
-  const tail = `${season ? `${season} ` : ''}${team.name} TV schedule with every game’s Canadian channel: ${teamChannelSummary(team, data)}.`;
+  const tail = `${season ? `${season} ` : ''}${team.name} TV schedule.`;
   const spot = spotlightGame(data.games, team.abbrev, now);
-  if (!spot) return `No upcoming ${team.name} games are scheduled. ${tail}`;
-  return `${spotlightSentence(team, spot, data.teamsByAbbrev)} ${tail}`;
+  if (!spot) return clipMeta(`No upcoming ${team.name} games are scheduled. ${tail}`);
+  const channels = gameChannels(spot.game);
+  const when = spot.today ? 'today' : spot.tomorrow ? 'tomorrow' : `on ${easternShortDate(spot.game.start)}`;
+  const opp = opponentPhrase(spot.game, team.abbrev, data.teamsByAbbrev, { short: true });
+  const time = spot.game.schedule === 'TBD' ? '' : `, ${easternTime(spot.game)}`;
+  const lead = channels.length
+    ? `${andList(channels.map(channelPhrase))} — ${team.common} ${opp} ${when}${time}.`
+    : `No Canadian TV listed yet for the ${team.common} game ${opp} ${when}${time}.`;
+  return clipMeta(`${lead} ${tail}`);
 }
 
 // ---------------------------------------------------------------- season breakdown
@@ -278,7 +326,7 @@ export function seasonChannelCounts(games, abbrev) {
 /** National rules for 2026–27, shared by every team page and the how-to page. */
 export const NATIONAL_TV_2026 = [
   'Sportsnet is the main national English broadcaster, including Saturday nights, when TVA Sports has the French broadcast.',
-  'Monday Night Hockey is exclusive to Sportsnet+, Rogers’ streaming service.',
+  'Monday Night Hockey is on Sportsnet+, Rogers’ streaming service.',
   'Wednesday national games are exclusive to Prime Video.',
   'TVA Sports is the national French-language broadcaster.',
   'CBC does not carry NHL games in 2026–27, so no games are on free over-the-air TV.',
@@ -312,27 +360,33 @@ export function regionalTvParagraphs(team, data) {
   if (team.abbrev === 'OTT') {
     paras.push(
       `The Senators are a split market in ${season}. Their regional games are on TSN5 in English and RDS in French; when RDS is busy the French broadcast moves to RDS2 or RDS Info. Regional broadcasts are only available in ${region.name}, a territory shared with the Canadiens, and are blacked out elsewhere in Canada.`,
-      `Everything else is national: Sportsnet (often Sportsnet One or Sportsnet East) on Saturdays and other nights, Sportsnet+ with exclusive Monday nights, Prime Video with exclusive Wednesday games, and TVA Sports as the national French broadcaster. CBC does not carry the NHL this season.`,
+      `Everything else is national: Sportsnet (often Sportsnet One or Sportsnet East) on Saturdays and other nights, Sportsnet+ on Monday nights, Prime Video with exclusive Wednesday games, and TVA Sports as the national French broadcaster. CBC does not carry the NHL this season.`,
     );
   } else if (team.abbrev === 'TOR') {
+    const tsn4 = regional.find(([code]) => code === 'TSN4')?.[1];
+    const sno = regional.find(([code]) => code === 'SNO')?.[1];
+    const split =
+      tsn4 != null && sno != null
+        ? `Most Maple Leafs regional games are on TSN4 (${tsn4} this season), with only ${sno} on Sportsnet Ontario.`
+        : 'Most Maple Leafs regional games are on TSN4, with only a few on Sportsnet Ontario.';
     paras.push(
-      `Maple Leafs regional rights are split between TSN4 and Sportsnet Ontario. Regional games air only in ${region.name} and parts of Northwestern Ontario, and are blacked out in the rest of Canada.`,
+      `${split} Regional games air only in ${region.name} and parts of Northwestern Ontario, and are blacked out in the rest of Canada.`,
       'Most other Leafs games are national on Sportsnet (Saturdays with TVA Sports in French), Sportsnet+ on Monday nights, and Prime Video on Wednesdays. CBC does not carry the NHL this season.',
     );
   } else if (team.abbrev === 'MTL') {
     paras.push(
       `Canadiens regional games are on TSN2 in English and RDS in French, available only in ${region.name} (shared with the Senators). TVA Sports carries the national French games, mostly Saturdays.`,
-      'National English games are on Sportsnet, Sportsnet+ (exclusive Monday nights), and Prime Video (exclusive Wednesdays). CBC does not carry the NHL this season.',
+      'National English games are on Sportsnet, Sportsnet+ on Monday nights, and Prime Video (exclusive Wednesdays). CBC does not carry the NHL this season.',
     );
   } else if (region) {
     paras.push(
       regional.length
-        ? `${team.name} regional games are on ${andList(regional.map(([code]) => networkName(code)))}, available only in ${region.name}. Other games are national: Sportsnet, Sportsnet+ (exclusive Monday nights), Prime Video (exclusive Wednesdays), and TVA Sports in French.`
+        ? `${team.name} regional games are on ${andList(regional.map(([code]) => networkName(code)))}, available only in ${region.name}. Other games are national: Sportsnet, Sportsnet+ on Monday nights, Prime Video (exclusive Wednesdays), and TVA Sports in French.`
         : `${team.name} games air in Canada on national channels: Sportsnet, Sportsnet+, Prime Video, and TVA Sports in French.`,
     );
   } else {
     paras.push(
-      `The ${team.name} have no Canadian regional broadcaster, so in Canada their games are only on national channels: Sportsnet, Sportsnet+ (exclusive Monday nights), Prime Video (exclusive Wednesdays), and TVA Sports in French. Games without a national broadcast are usually available with Sportsnet+ Premium’s out-of-market package.`,
+      `The ${team.name} have no Canadian regional broadcaster, so in Canada their games are only on national channels: Sportsnet, Sportsnet+ on Monday nights, Prime Video (exclusive Wednesdays), and TVA Sports in French. Games without a national broadcast are usually available with Sportsnet+ Premium’s out-of-market package.`,
     );
   }
   if (regional.length) {
@@ -406,11 +460,19 @@ export function faqJsonLd(faq, url) {
 
 // ---------------------------------------------------------------- calendar subscribe
 
-/** Plain feed, webcal, and Google Calendar links for a team. */
-export function feedLinks(abbrev, root = SITE_URL) {
+/** Plain feed, webcal, Google Calendar, and Outlook subscribe links for a team. */
+export function feedLinks(abbrev, root = SITE_URL, label) {
   const feed = new URL(plainFeedPath(abbrev), root).href;
   const webcal = feed.replace(/^https?:/, 'webcal:');
-  return { feed, webcal, google: `https://calendar.google.com/calendar/r?cid=${encodeURIComponent(webcal)}` };
+  const title = label ?? `${abbrev} NHL on Canadian TV`;
+  const outlookQuery = `url=${encodeURIComponent(feed)}&name=${encodeURIComponent(title)}`;
+  return {
+    feed,
+    webcal,
+    google: `https://calendar.google.com/calendar/r?cid=${encodeURIComponent(webcal)}`,
+    live: `https://outlook.live.com/calendar/0/addfromweb?${outlookQuery}`,
+    work: `https://outlook.office.com/calendar/0/addfromweb?${outlookQuery}`,
+  };
 }
 
 /**
@@ -419,7 +481,7 @@ export function feedLinks(abbrev, root = SITE_URL) {
  * team.js keeps this markup and only repoints the links once subscriptions are picked.
  */
 export function calendarCardHtml(team, { howTo = '../../how-to/', root = SITE_URL } = {}) {
-  const { feed, webcal, google } = feedLinks(team.abbrev, root);
+  const { feed, webcal, google, live, work } = feedLinks(team.abbrev, root, `${team.name} on Canadian TV`);
   return `
     <div class="calendar-head">
       <h2 class="calendar-title" id="calendar-title">Add the ${esc(team.common)} TV schedule to your calendar</h2>
@@ -433,7 +495,9 @@ export function calendarCardHtml(team, { howTo = '../../how-to/', root = SITE_UR
     </fieldset>
     <div class="calendar-actions">
       <a class="btn btn-primary" data-link="google" href="${esc(google)}" target="_blank" rel="noopener">Google Calendar</a>
-      <a class="btn" data-link="webcal" href="${esc(webcal)}">Apple Calendar / Outlook</a>
+      <a class="btn" data-link="webcal" href="${esc(webcal)}">Apple Calendar</a>
+      <a class="btn" data-link="live" href="${esc(live)}" target="_blank" rel="noopener">Outlook.com</a>
+      <a class="btn" data-link="work" href="${esc(work)}" target="_blank" rel="noopener">Outlook 365</a>
       <a class="btn" data-link="download" href="${esc(feed)}" download="${esc(team.abbrev)}.ics">Download .ics</a>
     </div>
     <div class="calendar-url">
@@ -448,7 +512,13 @@ export function calendarCardHtml(team, { howTo = '../../how-to/', root = SITE_UR
 }
 export function upcomingGames(games, abbrev, now = Date.now()) {
   return games
-    .filter((game) => (game.home === abbrev || game.away === abbrev) && isUpcoming(game, now))
+    .filter(
+      (game) =>
+        (game.home === abbrev || game.away === abbrev) &&
+        game.schedule !== 'PPD' &&
+        game.schedule !== 'CNCL' &&
+        isUpcoming(game, now),
+    )
     .sort((a, b) => String(a.start).localeCompare(String(b.start)));
 }
 

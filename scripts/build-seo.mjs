@@ -26,7 +26,6 @@ import {
   NATIONAL_TV_2026,
   calendarCardHtml,
   channelChipsHtml,
-  channelLabel,
   easternDateKey,
   easternLongDate,
   easternShortDate,
@@ -276,10 +275,6 @@ function gamesHtml(team, games, teamsByAbbrev) {
     const home = game.home === team.abbrev;
     const oppAbbrev = home ? game.away : game.home;
     const opp = teamsByAbbrev.get(oppAbbrev) ?? { abbrev: oppAbbrev, name: oppAbbrev, logo: '', logoDark: '' };
-    const channels = (game.tv ?? []).map(channelLabel);
-    const tv = channels.length
-      ? channels.map((name) => `<li class="tv"><span class="tv-name">${esc(name)}</span></li>`).join('')
-      : '<li class="tv tv-none">No Canadian TV listing</li>';
     items.push(`
     <li class="game">
       <div class="game-when">
@@ -294,7 +289,7 @@ function gamesHtml(team, games, teamsByAbbrev) {
           ${game.venue ? `<span class="game-venue">${esc(game.venue)}</span>` : ''}
         </span>
       </div>
-      <ul class="game-tv" aria-label="Canadian broadcasts">${tv}</ul>
+      <ul class="game-tv" aria-label="Canadian broadcasts">${channelChipsHtml(game)}</ul>
     </li>`);
   }
   return `
@@ -353,7 +348,7 @@ function tvGuideHtml(team, data) {
   const rows = counts.rows
     .map(
       (r) => `
-          <tr><th scope="row">${esc(r.name)}</th><td>${esc(r.kind)}${r.french ? ', French' : ''}</td><td class="num">${r.count}</td></tr>`,
+          <tr><th scope="row">${esc(r.name)}</th><td>${esc(r.kind)}${r.code === 'Prime' ? ', English and French' : r.french ? ', French' : ''}</td><td class="num">${r.count}</td></tr>`,
     )
     .join('');
   const noTv = counts.noTv
@@ -371,7 +366,7 @@ function tvGuideHtml(team, data) {
         <tbody>${rows}${noTv}
         </tbody>
       </table>
-      <p class="muted small">All ${counts.total} ${esc(team.name)} games of the ${esc(season)} regular season, played and upcoming. A game can be on more than one channel; other teams’ regional feeds are not counted.</p>`;
+      <p class="muted small">All ${counts.total} ${esc(team.name)} games of ${esc(season)}, played and upcoming. A game can be on more than one channel; other teams’ regional feeds are not counted.</p>`;
 }
 
 function faqHtml(team, faq) {
@@ -432,7 +427,6 @@ function teamPage(team, data, teamsByAbbrev, writeKey) {
     </section>
     <section class="prefs card" id="prefs" aria-label="Your subscriptions"></section>
     <section id="coverage" class="card coverage" aria-live="polite"></section>
-    <section id="history" class="card history" aria-labelledby="history-title" hidden></section>
     <section id="calendar" class="card calendar" aria-labelledby="calendar-title">
       ${calendarCardHtml(team)}
     </section>
@@ -466,14 +460,14 @@ const HOWTO_STEPS = {
     'Google’s phone apps can’t add a calendar by URL, but once added on the web it shows on your phone too. Google refreshes subscribed calendars every few hours, sometimes only once a day.',
   ],
   apple: [
-    'On iPhone, iPad, or Mac, open your team’s page and press “Apple Calendar / Outlook”. Calendar asks whether to subscribe; confirm.',
+    'On iPhone, iPad, or Mac, open your team’s page and press “Apple Calendar”. Calendar asks whether to subscribe; confirm.',
     'Or add it by hand. iPhone and iPad: Settings → Calendar (Settings → Apps → Calendar on newer iOS) → Accounts → Add Account → Other → Add Subscribed Calendar, then paste the feed URL. Mac: in Calendar choose File → New Calendar Subscription and paste the feed URL.',
     'On a Mac, set “Auto-refresh” to every hour or every day so broadcaster changes come through.',
   ],
   outlook: [
-    'Outlook on the web, Outlook.com, and the new Outlook for Windows: open Calendar, choose “Add calendar” → “Subscribe from web”, paste the feed URL, give it a name, and press “Import”.',
+    'On your team’s page, press “Outlook.com” for a personal Microsoft account, or “Outlook 365” for a work or school Microsoft 365 account. Outlook opens with the feed filled in; confirm to add it.',
+    'Or, in Outlook on the web: open Calendar, choose “Add calendar” → “Subscribe from web”, paste the feed URL, give it a name, and press “Import”. The same subscribe-from-web links are https://outlook.live.com/calendar/0/addfromweb?url= (Outlook.com) and https://outlook.office.com/calendar/0/addfromweb?url= (Microsoft 365).',
     'Classic Outlook for Windows: in Calendar choose Home → Add Calendar → From Internet, paste the feed URL, and confirm.',
-    'The “Apple Calendar / Outlook” button on a team page opens a webcal:// link, which desktop Outlook can subscribe to directly.',
   ],
 };
 
