@@ -1,4 +1,4 @@
-import { SERVICES, gameCoverage, seasonCoverage, suggestions, teamCoverage, viewerMarket } from './coverage.js';
+import { SERVICES, gameCoverage, isUpcoming, seasonCoverage, suggestions, teamCoverage, viewerMarket } from './coverage.js';
 import { feedPath, feedSelection, plainFeedPath } from './feeds.js';
 import { calendarCardHtml, teamDescription, teamJsonLd, teamTitle, teamUrl } from './seo.js';
 import {
@@ -337,8 +337,9 @@ function markNextGame(team, data, prefs) {
   const row = document.querySelector('#next-game .next-row');
   if (!row) return;
   const game = findGame(data.games, row);
-  const coverage = game ? gameCoverage(game, viewerMarket(prefs.market, team.abbrev), prefs.services) : null;
-  markGameRow(row, coverage, { has: prefs.services.length > 0, rowStatus: true });
+  const done = Boolean(game) && (game.schedule === 'PPD' || game.schedule === 'CNCL' || !isUpcoming(game));
+  const coverage = !done && game ? gameCoverage(game, viewerMarket(prefs.market, team.abbrev), prefs.services) : null;
+  markGameRow(row, coverage, { has: prefs.services.length > 0 && !done, rowStatus: true });
 }
 
 function marketSentence(cov, data) {

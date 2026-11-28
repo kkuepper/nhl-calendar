@@ -832,18 +832,25 @@ h1, h2, h3 { line-height: 1.2; margin: 0; }
 .tv-mine {
   background: var(--ok-soft);
   border-color: color-mix(in srgb, var(--ok) 40%, transparent);
-  color: var(--ok);
+  color: #166534;
   font-weight: 650;
 }
 
-.tv-mine .tv-tag { color: inherit; opacity: .8; }
+.tv-mine .tv-tag { color: inherit; opacity: 1; }
 
 /* Check on a pill the viewer gets, added to prerendered rows by markGameRow (ui.js). */
 .tv-check { display: inline-flex; flex: none; }
 .tv-check svg { width: .95em; height: .95em; }
 
+.tv-maybe { border-style: dashed; border-color: var(--ok); }
 .tv-blackout { color: var(--faint); background: transparent; border-style: dashed; }
 .tv-blackout .tv-name { text-decoration: line-through; }
+
+.tv-name-short { display: none; }
+
+@media (prefers-color-scheme: dark) {
+  .tv-mine { color: var(--ok); }
+}
 
 .tv-none { color: var(--faint); background: transparent; border-style: dashed; }
 
@@ -1189,6 +1196,9 @@ h1, h2, h3 { line-height: 1.2; margin: 0; }
     max-width: 100%;
   }
   .game-slate .tv-name { overflow: hidden; text-overflow: ellipsis; }
+  .tv-oom { white-space: normal; flex-wrap: wrap; }
+  .tv-oom .tv-name-full { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+  .tv-oom .tv-name-short { display: inline; overflow: visible; }
   .game-slate .tv-tag { font-size: .56rem; letter-spacing: .04em; }
   .game-slate .tv-none { padding: 0; border: 0; background: transparent; font-size: .68rem; }
 }

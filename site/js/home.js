@@ -1,4 +1,4 @@
-import { slateCoverage, teamCoverage } from './coverage.js';
+import { isUpcoming, slateCoverage, teamCoverage } from './coverage.js';
 import {
   esc,
   findGame,
@@ -60,11 +60,18 @@ async function main() {
 }
 
 /** Highlights channels the viewer gets in the prerendered "Tonight on Canadian TV" list. */
+function isSlateDone(game, row) {
+  if (row.classList.contains('game-off')) return true;
+  if (!game) return false;
+  return game.schedule === 'PPD' || game.schedule === 'CNCL' || !isUpcoming(game);
+}
+
 function markTonight(data, prefs) {
   const has = prefs.services.length > 0;
   for (const row of document.querySelectorAll('.tonight .game-slate')) {
     const game = findGame(data.games, row);
-    markGameRow(row, game ? slateCoverage(game, prefs) : null, { has });
+    const done = isSlateDone(game, row);
+    markGameRow(row, !done && game ? slateCoverage(game, prefs) : null, { has: has && !done });
   }
 }
 

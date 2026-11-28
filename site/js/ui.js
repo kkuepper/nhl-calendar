@@ -292,21 +292,59 @@ export function markGameRow(row, coverage, { has, rowStatus = false }) {
     const name = pill.querySelector('.tv-name')?.textContent.trim();
     const mark = name ? marks.get(name) : undefined;
     const mine = has && mark === 'mine';
+    const maybe = has && mark === 'maybe';
+    const blackout = has && mark === 'blackout';
     pill.classList.toggle('tv-mine', mine);
-    pill.classList.toggle('tv-blackout', mark === 'blackout');
+    pill.classList.toggle('tv-maybe', maybe);
+    pill.classList.toggle('tv-blackout', blackout);
+
+    if (!('originalTitle' in pill.dataset)) {
+      pill.dataset.originalTitle = pill.getAttribute('title') ?? '';
+    }
+    if (maybe) {
+      pill.title = 'Included in your subscriptions if you watch from this team’s region. Pick “Where you watch” to be sure.';
+    } else if (pill.dataset.originalTitle) {
+      pill.title = pill.dataset.originalTitle;
+    } else {
+      pill.removeAttribute('title');
+    }
+
+    // Team upcoming list uses a "blacked out" tag in place of "regional".
+    for (const tag of pill.querySelectorAll('.tv-tag')) {
+      if (!('originalTag' in tag.dataset)) tag.dataset.originalTag = tag.textContent;
+      if (blackout) {
+        const fr = /FR/i.test(tag.dataset.originalTag);
+        if (tag.classList.contains('tv-tag-short')) tag.textContent = fr ? 'OUT · FR' : 'OUT';
+        else tag.textContent = fr ? 'blacked out · FR' : 'blacked out';
+      } else {
+        tag.textContent = tag.dataset.originalTag;
+      }
+    }
+
     if (mine) {
       pill.insertAdjacentHTML('afterbegin', `<span class="tv-check" data-mark>${CHECK}</span>`);
-      pill.insertAdjacentHTML('beforeend', '<span class="sr-only" data-mark>, included in your subscriptions</span>');
-    } else if (mark === 'blackout') {
-      pill.insertAdjacentHTML('beforeend', '<span class="sr-only" data-mark>, blacked out where you watch</span>');
+      pill.insertAdjacentHTML('beforeend', '<span class="sr-only" data-mark>. Included in your subscriptions.</span>');
+    } else if (maybe) {
+      pill.insertAdjacentHTML('beforeend', '<span class="sr-only" data-mark>. Included in your subscriptions only if you watch from this team’s region.</span>');
+    } else if (blackout) {
+      pill.insertAdjacentHTML('beforeend', '<span class="sr-only" data-mark>. Blacked out where you watch.</span>');
     }
   }
 
   // The tonight scoreboard hides .tv-tag-full on small screens, leaving just the name.
-  if (has && coverage?.outOfMarket) {
+  if (has && (coverage?.outOfMarket || coverage?.outOfMarketMaybe)) {
+    const maybeOom = Boolean(coverage.outOfMarketMaybe) && !coverage.outOfMarket;
+    const cls = maybeOom ? 'tv tv-maybe tv-oom' : 'tv tv-mine tv-oom';
+    const title = maybeOom
+      ? 'Out-of-market package may carry this game, depending on where you watch.'
+      : `Out-of-market game on ${esc(coverage.outOfMarketService.name)}`;
+    const sr = maybeOom
+      ? '. Included in your subscriptions only if you watch from this team’s region.'
+      : '. Included in your subscriptions.';
+    const check = maybeOom ? '' : `<span class="tv-check">${CHECK}</span>`;
     list.insertAdjacentHTML(
       'beforeend',
-      `<li class="tv tv-mine" data-mark title="Out-of-market game on ${esc(coverage.outOfMarketService.name)}"><span class="tv-check">${CHECK}</span><span class="tv-name">Sportsnet+ Premium</span><span class="tv-tag tv-tag-full">out-of-market</span><span class="sr-only">, included in your subscriptions</span></li>`,
+      `<li class="${cls}" data-mark title="${esc(title)}">${check}<span class="tv-name tv-name-full">Sportsnet+ Premium</span><span class="tv-name tv-name-short" aria-hidden="true">SN+ Prem</span><span class="tv-tag tv-tag-full">out-of-market</span><span class="sr-only">${sr}</span></li>`,
     );
   }
 

@@ -43,11 +43,12 @@ test('channelMarks: nothing mine without subscriptions', () => {
   assert.equal(marks.get('TSN4'), 'blackout');
 });
 
-test('slateCoverage: auto market blacks out neither team’s regional feed', () => {
-  const cov = slateCoverage(ottAtTor, { market: 'auto', services: ['sportsnet', 'tsn'] });
+test('slateCoverage: auto market only marks national feeds, regional ones are maybe', () => {
+  const cov = slateCoverage(ottAtTor, { market: 'auto', services: ['sportsnet', 'tsn', 'tva'] });
   const marks = channelMarks(cov);
-  assert.equal(marks.get('Sportsnet East'), 'mine');
-  assert.equal(marks.get('TSN4'), 'mine');
+  assert.equal(marks.get('Sportsnet East'), 'maybe');
+  assert.equal(marks.get('TSN4'), 'maybe');
+  assert.equal(marks.get('TVA Sports'), 'mine');
   assert.equal(cov.watchable, true);
   assert.equal(cov.broadcasts.some((b) => b.blackedOut), false);
 });
@@ -61,8 +62,24 @@ test('slateCoverage: a chosen region applies its blackouts', () => {
 test('slateCoverage: out-of-market package for a game without Canadian TV', () => {
   const cov = slateCoverage(usGame, { market: 'auto', services: ['snplus-premium'] });
   assert.equal(cov.outOfMarket, true);
+  assert.equal(cov.outOfMarketMaybe, false);
   assert.equal(cov.outOfMarketService.id, 'snplus-premium');
   assert.equal(cov.watchable, true);
+});
+
+test('slateCoverage: auto treats Premium as maybe when only one side is in-market', () => {
+  const ottAtTbl = {
+    away: 'OTT',
+    home: 'TBL',
+    tv: [
+      { network: 'TSN5', market: 'A' },
+      { network: 'RDS', market: 'A' },
+    ],
+  };
+  const cov = slateCoverage(ottAtTbl, { market: 'auto', services: ['snplus-premium'] });
+  assert.equal(cov.outOfMarket, false);
+  assert.equal(cov.outOfMarketMaybe, true);
+  assert.equal(cov.outOfMarketService.id, 'snplus-premium');
 });
 
 test('slateCoverage: no out-of-market for a game in the chosen region', () => {
