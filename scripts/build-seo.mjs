@@ -27,6 +27,7 @@ import {
   calendarCardHtml,
   channelChipsHtml,
   slateChipsHtml,
+  slateLead,
   easternDateKey,
   easternLongDate,
   easternShortDate,
@@ -213,10 +214,10 @@ const isCalledOff = (game) => game.schedule === 'PPD' || game.schedule === 'CNCL
 /** "1:00 p.m. ET" with the zone spelled out on hover, "time TBD", or a Postponed/Cancelled badge. */
 function slateTimeHtml(game) {
   if (game.schedule === 'PPD') {
-    return '<span class="badge badge-warn slate-badge-full">Postponed</span><span class="badge badge-warn slate-badge-short">PPD</span>';
+    return '<span class="badge badge-warn slate-badge-full">Postponed</span><span class="badge badge-warn slate-badge-short" aria-hidden="true">PPD</span>';
   }
   if (game.schedule === 'CNCL') {
-    return '<span class="badge badge-warn slate-badge-full">Cancelled</span><span class="badge badge-warn slate-badge-short">CANC</span>';
+    return '<span class="badge badge-warn slate-badge-full">Cancelled</span><span class="badge badge-warn slate-badge-short" aria-hidden="true">CANC</span>';
   }
   if (game.schedule === 'TBD') return `<span class="slate-time">${esc(easternTime(game))}</span>`;
   const text = easternTime(game);
@@ -264,23 +265,14 @@ function tonightHtml(data, teamsByAbbrev) {
 
   const heading = day.today ? `Tonight on Canadian TV · ${dateText}` : `Next NHL games on Canadian TV · ${dateText}`;
   const calledOff = sorted.filter(isCalledOff);
-  const calledOffStatus = calledOff.every((g) => g.schedule === 'PPD')
-    ? 'postponed'
-    : calledOff.every((g) => g.schedule === 'CNCL')
-      ? 'cancelled'
-      : 'postponed or cancelled';
-  let lead;
-  if (day.today && !counted.length && calledOff.length) {
-    const n = calledOff.length;
-    lead = n === 1 ? `The only game today is ${calledOffStatus}.` : `All ${n} games today are ${calledOffStatus}.`;
-  } else if (day.today) {
-    lead = `${counted.length} NHL game${counted.length === 1 ? '' : 's'} today, ${onTv} on Canadian TV. What channel each game is on — Sportsnet, TSN, RDS, TVA Sports, Prime Video, or Sportsnet+ — with regional broadcasts labelled.`;
-  } else if (!counted.length && calledOff.length) {
-    const n = calledOff.length;
-    lead = `No NHL games today (${easternLongDate(NOW)}). The next slate is ${dateText}, but ${n === 1 ? `that game is ${calledOffStatus}` : `all ${n} games are ${calledOffStatus}`}.`;
-  } else {
-    lead = `No NHL games today (${easternLongDate(NOW)}). The next slate is ${dateText}, with ${counted.length} game${counted.length === 1 ? '' : 's'}.`;
-  }
+  const lead = slateLead({
+    today: day.today,
+    countedCount: counted.length,
+    onTv,
+    calledOff,
+    nextDateText: dateText,
+    nowLabel: easternLongDate(NOW),
+  });
   return `
     <section class="tonight" aria-labelledby="tonight-title">
       <div class="games-head">

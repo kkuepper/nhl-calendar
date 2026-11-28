@@ -1077,8 +1077,8 @@ h1, h2, h3 { line-height: 1.2; margin: 0; }
 }
 
 
-/* Tonight list scoreboard: also covers ~768px without subgrid, where full names would wrap. */
-@media (max-width: 768px) {
+/* Tonight list scoreboard: also covers ~800px without subgrid, where full names would wrap. */
+@media (max-width: 800px) {
   .slate-list { display: block; }
 
   .game-slate {
@@ -1102,8 +1102,11 @@ h1, h2, h3 { line-height: 1.2; margin: 0; }
   .game-slate .slate-clock { font-size: .92rem; font-weight: 700; }
   .game-slate .slate-meridiem { font-size: .62rem; font-weight: 650; color: var(--muted); }
   .game-slate .slate-meridiem abbr { font-weight: 650; text-underline-offset: 2px; }
-  .game-slate .slate-badge-full, .game-slate .tv-tag-full, .game-slate .tv-none-full, .game-slate .slate-at-full { display: none; }
-  .game-slate .slate-name-full {
+  .game-slate .slate-name-full,
+  .game-slate .slate-at-full,
+  .game-slate .tv-none-full,
+  .game-slate .tv-tag-full,
+  .game-slate .slate-badge-full {
     position: absolute;
     width: 1px;
     height: 1px;
