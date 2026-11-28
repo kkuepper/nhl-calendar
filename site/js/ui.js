@@ -210,7 +210,7 @@ export const percent = (fraction) => `${Math.round(fraction * 100)}%`;
 export function logoHtml(team, { size = 48, className = 'logo', alt = '' } = {}) {
   return `<picture class="${className}">
     <source srcset="${esc(team.logoDark)}" media="(prefers-color-scheme: dark)">
-    <img src="${esc(team.logo)}" alt="${esc(alt)}" width="${size}" height="${size}" loading="lazy" decoding="async">
+    <img src="${esc(team.logo)}" alt="${esc(alt)}" width="${size}" height="${size}" loading="lazy" decoding="async" onerror="this.parentElement.hidden=true">
   </picture>`;
 }
 
