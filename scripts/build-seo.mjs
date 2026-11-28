@@ -26,6 +26,8 @@ import {
   NATIONAL_TV_2026,
   calendarCardHtml,
   channelChipsHtml,
+  slateChipsHtml,
+  slateLead,
   easternDateKey,
   easternLongDate,
   easternShortDate,
@@ -198,9 +200,30 @@ function slate(games, now) {
   return { today: false, key, games: games.filter((g) => easternDateKey(g.start) === key) };
 }
 
+// The name sits in the same link as the logo, so the logo's alt stays empty.
 function teamLink(abbrev, teamsByAbbrev) {
   const team = teamsByAbbrev.get(abbrev);
-  return team ? `<a href="team/${esc(abbrev)}/">${esc(team.name)}</a>` : esc(abbrev);
+  if (!team) return esc(abbrev);
+  const logo = team.logo ? logoHtml(team, { size: 22, className: 'slate-logo' }) : '';
+  const short = team.common && team.common !== team.name ? team.common : team.name;
+  return `<a class="slate-team" href="team/${esc(abbrev)}/">${logo}<span class="slate-name-full">${esc(team.name)}</span><span class="slate-name-short" aria-hidden="true">${esc(short)}</span></a>`;
+}
+
+const isCalledOff = (game) => game.schedule === 'PPD' || game.schedule === 'CNCL';
+
+/** "1:00 p.m. ET" with the zone spelled out on hover, "time TBD", or a Postponed/Cancelled badge. */
+function slateTimeHtml(game) {
+  if (game.schedule === 'PPD') {
+    return '<span class="badge badge-warn slate-badge-full">Postponed</span><span class="badge badge-warn slate-badge-short" aria-hidden="true">PPD</span>';
+  }
+  if (game.schedule === 'CNCL') {
+    return '<span class="badge badge-warn slate-badge-full">Cancelled</span><span class="badge badge-warn slate-badge-short" aria-hidden="true">CANC</span>';
+  }
+  if (game.schedule === 'TBD') return `<span class="slate-time">${esc(easternTime(game))}</span>`;
+  const text = easternTime(game);
+  const m = text.match(/^(.*?) (a\.m\.|p\.m\.) ET$/);
+  if (!m) return `<span class="slate-time">${esc(text)}</span>`;
+  return `<span class="slate-time"><span class="slate-clock">${esc(m[1])}</span> <span class="slate-meridiem">${esc(m[2])} <abbr title="Eastern Time">ET</abbr></span></span>`;
 }
 
 function tonightHtml(data, teamsByAbbrev) {
@@ -214,21 +237,22 @@ function tonightHtml(data, teamsByAbbrev) {
   }
   const sorted = [...day.games].sort((a, b) => String(a.start).localeCompare(String(b.start)) || a.home.localeCompare(b.home));
   const dateText = easternLongDate(`${day.key}T17:00:00Z`);
-  const onTv = sorted.filter((g) => gameChannels(g).length).length;
+  const counted = sorted.filter((g) => !isCalledOff(g));
+  const onTv = counted.filter((g) => gameChannels(g).length).length;
   const items = sorted
     .map((game) => {
-      const done = !isUpcoming(game, NOW);
-      const badge = game.state === 'OFF' || game.state === 'FINAL' ? ' <span class="badge badge-warn">Final</span>' : '';
+      const calledOff = isCalledOff(game);
+      const done = calledOff || !isUpcoming(game, NOW);
+      const badge = !calledOff && (game.state === 'OFF' || game.state === 'FINAL') ? ' <span class="badge badge-warn">Final</span>' : '';
       return `
       <li class="game game-slate${done ? ' game-off' : ''}">
         <div class="game-when">
-          <span class="game-date">${esc(easternTime(game).replace(/ ET$/, ''))}</span>
-          <span class="game-time">Eastern Time${badge}</span>
+          ${calledOff ? slateTimeHtml(game) : `${slateTimeHtml(game)}${badge}`}
         </div>
         <div class="game-match">
-          <span class="slate-teams">${teamLink(game.away, teamsByAbbrev)} <span class="muted">at</span> ${teamLink(game.home, teamsByAbbrev)}</span>
+          <span class="slate-teams">${teamLink(game.away, teamsByAbbrev)} <span class="slate-home"><span class="muted slate-at-full">at</span><span class="muted slate-at-short" aria-hidden="true">@</span> ${teamLink(game.home, teamsByAbbrev)}</span></span>
         </div>
-        <ul class="game-tv" aria-label="Canadian broadcasts">${channelChipsHtml(game)}</ul>
+        <ul class="game-tv" aria-label="Canadian broadcasts">${slateChipsHtml(game)}</ul>
       </li>`;
     })
     .join('');
@@ -240,9 +264,15 @@ function tonightHtml(data, teamsByAbbrev) {
     : '';
 
   const heading = day.today ? `Tonight on Canadian TV · ${dateText}` : `Next NHL games on Canadian TV · ${dateText}`;
-  const lead = day.today
-    ? `${sorted.length} NHL game${sorted.length === 1 ? '' : 's'} today, ${onTv} on Canadian TV. What channel each game is on — Sportsnet, TSN, RDS, TVA Sports, Prime Video, or Sportsnet+ — with regional broadcasts labelled.`
-    : `No NHL games today (${easternLongDate(NOW)}). The next slate is ${dateText}, with ${sorted.length} game${sorted.length === 1 ? '' : 's'}.`;
+  const calledOff = sorted.filter(isCalledOff);
+  const lead = slateLead({
+    today: day.today,
+    countedCount: counted.length,
+    onTv,
+    calledOff,
+    nextDateText: dateText,
+    nowLabel: easternLongDate(NOW),
+  });
   return `
     <section class="tonight" aria-labelledby="tonight-title">
       <div class="games-head">
@@ -250,7 +280,7 @@ function tonightHtml(data, teamsByAbbrev) {
         <p class="muted small">Times in Eastern Time · checked ${timeTag(NOW)}</p>
       </div>
       <p class="tonight-lead">${esc(lead)}</p>
-      <ol class="game-list">${items}</ol>
+      <ol class="game-list slate-list">${items}</ol>
       ${teaser}
     </section>`;
 }

@@ -122,6 +122,54 @@ export function channelChipsHtml(game) {
     .join('');
 }
 
+/** Tonight-list chips: same desktop wording, plus a short tag used only on small screens. */
+function slateShortTag(c) {
+  const fr = c.french || c.code === 'Prime';
+  if (c.kind === 'national') return fr ? 'FR' : '';
+  if (c.kind === 'streaming') return fr ? 'STREAM · FR' : 'STREAM';
+  if (c.kind === 'regional') return fr ? 'REG · FR' : 'REG';
+  return '';
+}
+
+export function slateChipsHtml(game) {
+  const channels = gameChannels(game);
+  if (!channels.length) {
+    return '<li class="tv tv-none"><span class="tv-none-full">No Canadian TV listing</span><span class="tv-none-short" title="No Canadian TV listing" aria-hidden="true">No TV</span></li>';
+  }
+  return channels
+    .map((c) => {
+      const short = slateShortTag(c);
+      const shortHtml = short ? `<span class="tv-tag tv-tag-short" aria-hidden="true">${esc(short)}</span>` : '';
+      return `<li class="tv"><span class="tv-name">${esc(c.name)}</span><span class="tv-tag tv-tag-full">${esc(c.kind)}${frenchTag(c)}</span>${shortHtml}</li>`;
+    })
+    .join('');
+}
+
+
+/** Lead sentence for the homepage tonight list. */
+export function slateLead({ today, countedCount, onTv, calledOff, nextDateText, nowLabel }) {
+  const nOff = calledOff.length;
+  const status = !nOff
+    ? ''
+    : calledOff.every((g) => g.schedule === 'PPD')
+      ? 'postponed'
+      : calledOff.every((g) => g.schedule === 'CNCL')
+        ? 'cancelled'
+        : 'postponed or cancelled';
+
+  if (today && !countedCount && nOff) {
+    return nOff === 1 ? `The only game today is ${status}.` : `All ${nOff} games today are ${status}.`;
+  }
+  if (today) {
+    return `${countedCount} NHL game${countedCount === 1 ? '' : 's'} today, ${onTv} on Canadian TV. What channel each game is on — Sportsnet, TSN, RDS, TVA Sports, Prime Video, or Sportsnet+ — with regional broadcasts labelled.`;
+  }
+  if (!countedCount && nOff) {
+    const clause = nOff === 1 ? `that game is ${status}` : `all ${nOff} games are ${status}`;
+    return `No NHL games today (${nowLabel}). The next slate is ${nextDateText}, but ${clause}.`;
+  }
+  return `No NHL games today (${nowLabel}). The next slate is ${nextDateText}, with ${countedCount} game${countedCount === 1 ? '' : 's'}.`;
+}
+
 // ---------------------------------------------------------------- the game people search for
 
 // Short names fans type into search boxes.
