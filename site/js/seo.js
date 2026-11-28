@@ -122,6 +122,29 @@ export function channelChipsHtml(game) {
     .join('');
 }
 
+/** Tonight-list chips: same desktop wording, plus a short tag used only on small screens. */
+function slateShortTag(c) {
+  const fr = c.french || c.code === 'Prime';
+  if (c.kind === 'national') return fr ? 'FR' : '';
+  if (c.kind === 'streaming') return fr ? 'STREAM · FR' : 'STREAM';
+  if (c.kind === 'regional') return fr ? 'REG · FR' : 'REG';
+  return '';
+}
+
+export function slateChipsHtml(game) {
+  const channels = gameChannels(game);
+  if (!channels.length) {
+    return '<li class="tv tv-none"><span class="tv-none-full">No Canadian TV listing</span><span class="tv-none-short" title="No Canadian TV listing" aria-hidden="true">No TV</span></li>';
+  }
+  return channels
+    .map((c) => {
+      const short = slateShortTag(c);
+      const shortHtml = short ? `<span class="tv-tag tv-tag-short">${esc(short)}</span>` : '';
+      return `<li class="tv"><span class="tv-name">${esc(c.name)}</span><span class="tv-tag tv-tag-full">${esc(c.kind)}${frenchTag(c)}</span>${shortHtml}</li>`;
+    })
+    .join('');
+}
+
 // ---------------------------------------------------------------- the game people search for
 
 // Short names fans type into search boxes.

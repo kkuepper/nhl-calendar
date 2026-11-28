@@ -26,6 +26,7 @@ import {
   NATIONAL_TV_2026,
   calendarCardHtml,
   channelChipsHtml,
+  slateChipsHtml,
   easternDateKey,
   easternLongDate,
   easternShortDate,
@@ -203,17 +204,25 @@ function teamLink(abbrev, teamsByAbbrev) {
   const team = teamsByAbbrev.get(abbrev);
   if (!team) return esc(abbrev);
   const logo = team.logo ? logoHtml(team, { size: 22, className: 'slate-logo' }) : '';
-  return `<a class="slate-team" href="team/${esc(abbrev)}/">${logo}<span>${esc(team.name)}</span></a>`;
+  const short = team.common && team.common !== team.name ? team.common : team.name;
+  return `<a class="slate-team" href="team/${esc(abbrev)}/">${logo}<span class="slate-name-full">${esc(team.name)}</span><span class="slate-name-short" aria-hidden="true">${esc(short)}</span></a>`;
 }
 
 const isCalledOff = (game) => game.schedule === 'PPD' || game.schedule === 'CNCL';
 
 /** "1:00 p.m. ET" with the zone spelled out on hover, "time TBD", or a Postponed/Cancelled badge. */
 function slateTimeHtml(game) {
-  if (game.schedule === 'PPD') return '<span class="badge badge-warn">Postponed</span>';
-  if (game.schedule === 'CNCL') return '<span class="badge badge-warn">Cancelled</span>';
-  if (game.schedule === 'TBD') return esc(easternTime(game));
-  return `${esc(easternTime(game).replace(/ ET$/, ''))} <abbr title="Eastern Time">ET</abbr>`;
+  if (game.schedule === 'PPD') {
+    return '<span class="badge badge-warn slate-badge-full">Postponed</span><span class="badge badge-warn slate-badge-short">PPD</span>';
+  }
+  if (game.schedule === 'CNCL') {
+    return '<span class="badge badge-warn slate-badge-full">Cancelled</span><span class="badge badge-warn slate-badge-short">CANC</span>';
+  }
+  if (game.schedule === 'TBD') return `<span class="slate-time">${esc(easternTime(game))}</span>`;
+  const text = easternTime(game);
+  const m = text.match(/^(.*?) (a\.m\.|p\.m\.) ET$/);
+  if (!m) return `<span class="slate-time">${esc(text)}</span>`;
+  return `<span class="slate-time"><span class="slate-clock">${esc(m[1])}</span> <span class="slate-meridiem">${esc(m[2])} <abbr title="Eastern Time">ET</abbr></span></span>`;
 }
 
 function tonightHtml(data, teamsByAbbrev) {
@@ -237,12 +246,12 @@ function tonightHtml(data, teamsByAbbrev) {
       return `
       <li class="game game-slate${done ? ' game-off' : ''}">
         <div class="game-when">
-          ${calledOff ? slateTimeHtml(game) : `<span class="slate-time">${slateTimeHtml(game)}</span>${badge}`}
+          ${calledOff ? slateTimeHtml(game) : `${slateTimeHtml(game)}${badge}`}
         </div>
         <div class="game-match">
-          <span class="slate-teams">${teamLink(game.away, teamsByAbbrev)} <span class="slate-home"><span class="muted">at</span> ${teamLink(game.home, teamsByAbbrev)}</span></span>
+          <span class="slate-teams">${teamLink(game.away, teamsByAbbrev)} <span class="slate-home"><span class="muted slate-at-full">at</span><span class="muted slate-at-short" aria-hidden="true">@</span> ${teamLink(game.home, teamsByAbbrev)}</span></span>
         </div>
-        <ul class="game-tv" aria-label="Canadian broadcasts">${channelChipsHtml(game)}</ul>
+        <ul class="game-tv" aria-label="Canadian broadcasts">${slateChipsHtml(game)}</ul>
       </li>`;
     })
     .join('');
@@ -254,9 +263,24 @@ function tonightHtml(data, teamsByAbbrev) {
     : '';
 
   const heading = day.today ? `Tonight on Canadian TV · ${dateText}` : `Next NHL games on Canadian TV · ${dateText}`;
-  const lead = day.today
-    ? `${counted.length} NHL game${counted.length === 1 ? '' : 's'} today, ${onTv} on Canadian TV. What channel each game is on — Sportsnet, TSN, RDS, TVA Sports, Prime Video, or Sportsnet+ — with regional broadcasts labelled.`
-    : `No NHL games today (${easternLongDate(NOW)}). The next slate is ${dateText}, with ${counted.length} game${counted.length === 1 ? '' : 's'}.`;
+  const calledOff = sorted.filter(isCalledOff);
+  const calledOffStatus = calledOff.every((g) => g.schedule === 'PPD')
+    ? 'postponed'
+    : calledOff.every((g) => g.schedule === 'CNCL')
+      ? 'cancelled'
+      : 'postponed or cancelled';
+  let lead;
+  if (day.today && !counted.length && calledOff.length) {
+    const n = calledOff.length;
+    lead = n === 1 ? `The only game today is ${calledOffStatus}.` : `All ${n} games today are ${calledOffStatus}.`;
+  } else if (day.today) {
+    lead = `${counted.length} NHL game${counted.length === 1 ? '' : 's'} today, ${onTv} on Canadian TV. What channel each game is on — Sportsnet, TSN, RDS, TVA Sports, Prime Video, or Sportsnet+ — with regional broadcasts labelled.`;
+  } else if (!counted.length && calledOff.length) {
+    const n = calledOff.length;
+    lead = `No NHL games today (${easternLongDate(NOW)}). The next slate is ${dateText}, but ${n === 1 ? `that game is ${calledOffStatus}` : `all ${n} games are ${calledOffStatus}`}.`;
+  } else {
+    lead = `No NHL games today (${easternLongDate(NOW)}). The next slate is ${dateText}, with ${counted.length} game${counted.length === 1 ? '' : 's'}.`;
+  }
   return `
     <section class="tonight" aria-labelledby="tonight-title">
       <div class="games-head">
