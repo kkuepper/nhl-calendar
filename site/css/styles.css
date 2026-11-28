@@ -838,6 +838,10 @@ h1, h2, h3 { line-height: 1.2; margin: 0; }
 
 .tv-mine .tv-tag { color: inherit; opacity: .8; }
 
+/* Check on a pill the viewer gets, added to prerendered rows by markGameRow (ui.js). */
+.tv-check { display: inline-flex; flex: none; }
+.tv-check svg { width: .95em; height: .95em; }
+
 .tv-blackout { color: var(--faint); background: transparent; border-style: dashed; }
 .tv-blackout .tv-name { text-decoration: line-through; }
 
@@ -919,6 +923,14 @@ h1, h2, h3 { line-height: 1.2; margin: 0; }
   background: var(--surface-2);
   border-radius: 10px;
 }
+
+.next-row.has-status {
+  grid-template-columns: 128px minmax(200px, 1.1fr) minmax(0, 1.6fr) auto;
+  grid-template-areas: "when match tv status";
+}
+
+.next-status { align-items: center; gap: 8px; }
+.next-status-text { font-size: .85rem; font-weight: 650; color: var(--ok); white-space: nowrap; }
 
 .next-answer { margin: 0; font-size: 1.08rem; font-weight: 500; max-width: 760px; }
 .next-note { margin: 8px 0 0; color: var(--muted); font-size: .92rem; max-width: 760px; }
@@ -1049,6 +1061,14 @@ h1, h2, h3 { line-height: 1.2; margin: 0; }
       "when"
       "match"
       "tv";
+  }
+
+  .next-row.has-status {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "when status"
+      "match match"
+      "tv tv";
   }
 
   .next-game { padding: 16px; }

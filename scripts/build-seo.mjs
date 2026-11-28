@@ -96,6 +96,9 @@ function replaceMarked(html, name, content) {
   return `${html.slice(0, from + start.length)}\n${content}\n${html.slice(to)}`;
 }
 
+// Lets the page find the game behind a prerendered row (findGame in ui.js) to mark the viewer's channels.
+const gameDataAttrs = (game) => `data-start="${esc(game.start)}" data-home="${esc(game.home)}" data-away="${esc(game.away)}"`;
+
 const timeTag = (iso) => `<time datetime="${esc(new Date(iso).toISOString())}">${esc(easternStamp(iso))}</time>`;
 
 /** <head> tags shared by the generated pages. `base` is the path back to the site root. */
@@ -245,7 +248,7 @@ function tonightHtml(data, teamsByAbbrev) {
       const done = calledOff || !isUpcoming(game, NOW);
       const badge = !calledOff && (game.state === 'OFF' || game.state === 'FINAL') ? ' <span class="badge badge-warn">Final</span>' : '';
       return `
-      <li class="game game-slate${done ? ' game-off' : ''}">
+      <li class="game game-slate${done ? ' game-off' : ''}" ${gameDataAttrs(game)}>
         <div class="game-when">
           ${calledOff ? slateTimeHtml(game) : `${slateTimeHtml(game)}${badge}`}
         </div>
@@ -352,7 +355,7 @@ function nextGameHtml(team, data, teamsByAbbrev) {
   return `
       <p class="next-eyebrow">${esc(label)} · ${esc(easternLongDate(game.start))}</p>
       <h2 class="next-title" id="next-game-title">${esc(question)}</h2>
-      <div class="next-row">
+      <div class="next-row" ${gameDataAttrs(game)}>
         <div class="game-when">
           <span class="game-date">${esc(easternShortDate(game.start))}</span>
           <span class="game-time">${esc(easternTime(game))}</span>
