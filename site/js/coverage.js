@@ -247,6 +247,62 @@ export function gameCoverage(game, market, serviceIds) {
   return { broadcasts, outOfMarket, outOfMarketService: outOfMarket ? premium : null, watchable: viaBroadcast || outOfMarket };
 }
 
+/**
+ * Coverage of one game on the home page, where there is no team to anchor the
+ * market. A chosen region applies as on team pages. "Each team's home market"
+ * (auto) is optimistic: a broadcast counts if a viewer in either team's home
+ * market could watch it, so neither team's regional feed is blacked out.
+ */
+export function slateCoverage(game, prefs) {
+  if (prefs.market && prefs.market !== 'auto' && REGIONS.some((r) => r.id === prefs.market)) {
+    return gameCoverage(game, viewerMarket(prefs.market, game.home), prefs.services);
+  }
+  const a = gameCoverage(game, viewerMarket('auto', game.away), prefs.services);
+  const b = gameCoverage(game, viewerMarket('auto', game.home), prefs.services);
+  const broadcasts = a.broadcasts.map((x, i) => {
+    const y = b.broadcasts[i];
+    // Auto can't know which team's market the viewer is in, so a regional feed is only
+    // "maybe" theirs; national and streaming feeds are the same everywhere.
+    const reach = x.mine || y.mine;
+    return { ...x, blackedOut: x.blackedOut && y.blackedOut, mine: reach && x.region === null, maybe: reach && x.region !== null };
+  });
+  const viaBroadcast = broadcasts.some((x) => x.mine || x.maybe);
+  // Premium is a sure out-of-market only when both sides agree (e.g. two US teams).
+  // If one side is a Canadian in-market game, it may still apply from elsewhere: maybe.
+  let outOfMarket = false;
+  let outOfMarketMaybe = false;
+  let outOfMarketService = null;
+  if (!viaBroadcast) {
+    if (a.outOfMarket && b.outOfMarket) {
+      outOfMarket = true;
+      outOfMarketService = a.outOfMarketService ?? b.outOfMarketService;
+    } else if (a.outOfMarket || b.outOfMarket) {
+      outOfMarketMaybe = true;
+      outOfMarketService = a.outOfMarketService ?? b.outOfMarketService;
+    }
+  }
+  return { broadcasts, outOfMarket, outOfMarketMaybe, outOfMarketService, watchable: viaBroadcast || outOfMarket || outOfMarketMaybe };
+}
+
+/**
+ * How each channel pill of a game should look, keyed by display name (pills
+ * are one per name: SNF and SNOL both show as "Sportsnet"). A name is 'mine'
+ * when any of its broadcasts is, 'blackout' when all of them are blacked out.
+ */
+export function channelMarks(coverage) {
+  const byName = new Map();
+  for (const b of coverage.broadcasts) {
+    byName.set(b.name, [...(byName.get(b.name) ?? []), b]);
+  }
+  const marks = new Map();
+  for (const [name, list] of byName) {
+    if (list.some((b) => b.mine)) marks.set(name, 'mine');
+    else if (list.some((b) => b.maybe)) marks.set(name, 'maybe');
+    else if (list.every((b) => b.blackedOut)) marks.set(name, 'blackout');
+  }
+  return marks;
+}
+
 const GAME_LENGTH_MS = 4 * 60 * 60 * 1000;
 
 export function isUpcoming(game, now = Date.now()) {

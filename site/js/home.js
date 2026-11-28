@@ -1,9 +1,11 @@
-import { teamCoverage } from './coverage.js';
+import { isUpcoming, slateCoverage, teamCoverage } from './coverage.js';
 import {
   esc,
+  findGame,
   loadData,
   loadPrefs,
   logoHtml,
+  markGameRow,
   mountFeedbackLink,
   mountPicker,
   percent,
@@ -41,7 +43,10 @@ async function main() {
   if (data.updatedAt) document.getElementById('updated').textContent = `Last change: ${updatedLabel(data.updatedAt)}.`;
 
   let prefs = loadPrefs();
-  const render = () => renderTeams(container, data, prefs);
+  const render = () => {
+    renderTeams(container, data, prefs);
+    markTonight(data, prefs);
+  };
   prefs = mountPicker(
     document.getElementById('prefs'),
     prefs,
@@ -52,6 +57,22 @@ async function main() {
     { marketHint: esc(MARKET_HINT) },
   );
   render();
+}
+
+/** Highlights channels the viewer gets in the prerendered "Tonight on Canadian TV" list. */
+function isSlateDone(game, row) {
+  if (row.classList.contains('game-off')) return true;
+  if (!game) return false;
+  return game.schedule === 'PPD' || game.schedule === 'CNCL' || !isUpcoming(game);
+}
+
+function markTonight(data, prefs) {
+  const has = prefs.services.length > 0;
+  for (const row of document.querySelectorAll('.tonight .game-slate')) {
+    const game = findGame(data.games, row);
+    const done = isSlateDone(game, row);
+    markGameRow(row, !done && game ? slateCoverage(game, prefs) : null, { has: has && !done });
+  }
 }
 
 function renderTeams(container, data, prefs) {

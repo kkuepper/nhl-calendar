@@ -1,7 +1,7 @@
 // Shared UI helpers: data loading, saved preferences, the subscription picker,
 // the coverage pie and small formatting utilities.
 
-import { DEFAULT_SERVICES, MARKETS, SERVICES } from './coverage.js';
+import { DEFAULT_SERVICES, MARKETS, SERVICES, channelMarks } from './coverage.js';
 
 // Site root, from this module's URL, so pages under /team/<ABBREV>/ still
 // load the shared JSON.
@@ -253,6 +253,108 @@ const TEAM_COLORS = {
 export function teamColorStyle(abbrev) {
   const [primary, secondary] = TEAM_COLORS[abbrev] ?? ['#334155', '#94a3b8'];
   return `--team:${primary};--team-2:${secondary}`;
+}
+
+// ---------------------------------------------------------------- watchable marks
+
+export const CHECK =
+  '<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M3.5 8.5l3 3 6-7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+export const CROSS =
+  '<svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
+
+/** The game a prerendered row stands for, from its data-start / data-home / data-away. */
+export function findGame(games, el) {
+  const { start, home, away } = el.dataset;
+  if (!start || !home || !away) return null;
+  return games.find((g) => g.start === start && g.home === home && g.away === away) ?? null;
+}
+
+/**
+ * Marks a prerendered game row (the team page's next-game card, a homepage
+ * tonight row) for the viewer's subscriptions: green pills and a check for
+ * channels they get, struck-through pills for blacked-out ones, and an
+ * out-of-market pill when Sportsnet+ Premium covers the game. The prerendered
+ * channel names stay as built; everything added carries data-mark and is
+ * removed on the next call, so this can run on every preference change.
+ *
+ * `coverage` is from gameCoverage / slateCoverage; `has` = any subscription
+ * picked (nothing is highlighted without one). `rowStatus` adds a check circle
+ * to the row when the game is watchable (the next-game card).
+ */
+export function markGameRow(row, coverage, { has, rowStatus = false }) {
+  for (const el of row.querySelectorAll('[data-mark]')) el.remove();
+  row.classList.remove('has-status');
+  const list = row.querySelector('.game-tv');
+  if (!list) return;
+
+  const marks = coverage ? channelMarks(coverage) : new Map();
+  for (const pill of list.querySelectorAll('.tv')) {
+    const name = pill.querySelector('.tv-name')?.textContent.trim();
+    const mark = name ? marks.get(name) : undefined;
+    const mine = has && mark === 'mine';
+    const maybe = has && mark === 'maybe';
+    const blackout = has && mark === 'blackout';
+    pill.classList.toggle('tv-mine', mine);
+    pill.classList.toggle('tv-maybe', maybe);
+    pill.classList.toggle('tv-blackout', blackout);
+
+    if (!('originalTitle' in pill.dataset)) {
+      pill.dataset.originalTitle = pill.getAttribute('title') ?? '';
+    }
+    if (maybe) {
+      pill.title = 'Included in your subscriptions if you watch from this team’s region. Pick “Where you watch” to be sure.';
+    } else if (pill.dataset.originalTitle) {
+      pill.title = pill.dataset.originalTitle;
+    } else {
+      pill.removeAttribute('title');
+    }
+
+    // Team upcoming list uses a "blacked out" tag in place of "regional".
+    for (const tag of pill.querySelectorAll('.tv-tag')) {
+      if (!('originalTag' in tag.dataset)) tag.dataset.originalTag = tag.textContent;
+      if (blackout) {
+        const fr = /FR/i.test(tag.dataset.originalTag);
+        if (tag.classList.contains('tv-tag-short')) tag.textContent = fr ? 'OUT · FR' : 'OUT';
+        else tag.textContent = fr ? 'blacked out · FR' : 'blacked out';
+      } else {
+        tag.textContent = tag.dataset.originalTag;
+      }
+    }
+
+    if (mine) {
+      pill.insertAdjacentHTML('afterbegin', `<span class="tv-check" data-mark>${CHECK}</span>`);
+      pill.insertAdjacentHTML('beforeend', '<span class="sr-only" data-mark>. Included in your subscriptions.</span>');
+    } else if (maybe) {
+      pill.insertAdjacentHTML('beforeend', '<span class="sr-only" data-mark>. Included in your subscriptions only if you watch from this team’s region.</span>');
+    } else if (blackout) {
+      pill.insertAdjacentHTML('beforeend', '<span class="sr-only" data-mark>. Blacked out where you watch.</span>');
+    }
+  }
+
+  // The tonight scoreboard hides .tv-tag-full on small screens, leaving just the name.
+  if (has && (coverage?.outOfMarket || coverage?.outOfMarketMaybe)) {
+    const maybeOom = Boolean(coverage.outOfMarketMaybe) && !coverage.outOfMarket;
+    const cls = maybeOom ? 'tv tv-maybe tv-oom' : 'tv tv-mine tv-oom';
+    const title = maybeOom
+      ? 'Out-of-market package may carry this game, depending on where you watch.'
+      : `Out-of-market game on ${esc(coverage.outOfMarketService.name)}`;
+    const sr = maybeOom
+      ? '. Included in your subscriptions only if you watch from this team’s region.'
+      : '. Included in your subscriptions.';
+    const check = maybeOom ? '' : `<span class="tv-check">${CHECK}</span>`;
+    list.insertAdjacentHTML(
+      'beforeend',
+      `<li class="${cls}" data-mark title="${esc(title)}">${check}<span class="tv-name tv-name-full">Sportsnet+ Premium</span><span class="tv-name tv-name-short" aria-hidden="true">SN+ Prem</span><span class="tv-tag tv-tag-full">out-of-market</span><span class="sr-only">${sr}</span></li>`,
+    );
+  }
+
+  if (rowStatus && has && coverage?.watchable) {
+    row.classList.add('has-status');
+    row.insertAdjacentHTML(
+      'beforeend',
+      `<div class="game-status next-status" data-mark><span class="status status-yes" title="You can watch this game" role="img" aria-label="You can watch this game">${CHECK}</span><span class="next-status-text" aria-hidden="true">You can watch this</span></div>`,
+    );
+  }
 }
 
 // ---------------------------------------------------------------- misc

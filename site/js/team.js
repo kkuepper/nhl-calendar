@@ -1,12 +1,16 @@
-import { SERVICES, seasonCoverage, suggestions, teamCoverage, viewerMarket } from './coverage.js';
+import { SERVICES, gameCoverage, isUpcoming, seasonCoverage, suggestions, teamCoverage, viewerMarket } from './coverage.js';
 import { feedPath, feedSelection, plainFeedPath } from './feeds.js';
 import { calendarCardHtml, teamDescription, teamJsonLd, teamTitle, teamUrl } from './seo.js';
 import {
+  CHECK,
+  CROSS,
   esc,
+  findGame,
   loadData,
   loadHistory,
   loadPrefs,
   logoHtml,
+  markGameRow,
   mountFeedbackLink,
   mountPicker,
   percent,
@@ -113,6 +117,7 @@ async function main() {
   const render = () => {
     const cov = teamCoverage(data.games, team.abbrev, state.prefs);
     renderCoverage(team, data, state.prefs, cov);
+    markNextGame(team, data, state.prefs);
     renderHistory(team, state);
     calendar.update(state.prefs);
     renderGames(gamesEl, team, data, state, cov, render);
@@ -323,6 +328,20 @@ function renderHero(team, data) {
     </div>`;
 }
 
+/**
+ * Highlights the prerendered next-game card (#next-game) for the viewer's
+ * subscriptions and region, like the upcoming list. The card only gets a check
+ * when the game is watchable, no cross.
+ */
+function markNextGame(team, data, prefs) {
+  const row = document.querySelector('#next-game .next-row');
+  if (!row) return;
+  const game = findGame(data.games, row);
+  const done = Boolean(game) && (game.schedule === 'PPD' || game.schedule === 'CNCL' || !isUpcoming(game));
+  const coverage = !done && game ? gameCoverage(game, viewerMarket(prefs.market, team.abbrev), prefs.services) : null;
+  markGameRow(row, coverage, { has: prefs.services.length > 0 && !done, rowStatus: true });
+}
+
 function marketSentence(cov, data) {
   if (cov.market === null) {
     return 'Assuming you watch from outside every Canadian team’s regional market, so regional broadcasts are blacked out.';
@@ -495,10 +514,5 @@ function gameRow({ game, coverage }, team, data, { has, start, today, tomorrow, 
       <div class="game-status">${status}</div>
     </li>`;
 }
-
-const CHECK =
-  '<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M3.5 8.5l3 3 6-7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
-const CROSS =
-  '<svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
 
 main();
