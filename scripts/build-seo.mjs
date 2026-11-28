@@ -198,9 +198,18 @@ function slate(games, now) {
   return { today: false, key, games: games.filter((g) => easternDateKey(g.start) === key) };
 }
 
+// The name sits in the same link as the logo, so the logo's alt stays empty.
 function teamLink(abbrev, teamsByAbbrev) {
   const team = teamsByAbbrev.get(abbrev);
-  return team ? `<a href="team/${esc(abbrev)}/">${esc(team.name)}</a>` : esc(abbrev);
+  if (!team) return esc(abbrev);
+  const logo = team.logo ? logoHtml(team, { size: 22, className: 'slate-logo' }) : '';
+  return `<a class="slate-team" href="team/${esc(abbrev)}/">${logo}<span>${esc(team.name)}</span></a>`;
+}
+
+/** "1:00 p.m. ET" with the zone spelled out on hover, or "time TBD". */
+function slateTimeHtml(game) {
+  if (game.schedule === 'TBD') return esc(easternTime(game));
+  return `${esc(easternTime(game).replace(/ ET$/, ''))} <abbr title="Eastern Time">ET</abbr>`;
 }
 
 function tonightHtml(data, teamsByAbbrev) {
@@ -222,8 +231,7 @@ function tonightHtml(data, teamsByAbbrev) {
       return `
       <li class="game game-slate${done ? ' game-off' : ''}">
         <div class="game-when">
-          <span class="game-date">${esc(easternTime(game).replace(/ ET$/, ''))}</span>
-          <span class="game-time">Eastern Time${badge}</span>
+          <span class="slate-time">${slateTimeHtml(game)}</span>${badge}
         </div>
         <div class="game-match">
           <span class="slate-teams">${teamLink(game.away, teamsByAbbrev)} <span class="muted">at</span> ${teamLink(game.home, teamsByAbbrev)}</span>
@@ -250,7 +258,7 @@ function tonightHtml(data, teamsByAbbrev) {
         <p class="muted small">Times in Eastern Time · checked ${timeTag(NOW)}</p>
       </div>
       <p class="tonight-lead">${esc(lead)}</p>
-      <ol class="game-list">${items}</ol>
+      <ol class="game-list slate-list">${items}</ol>
       ${teaser}
     </section>`;
 }
